@@ -18,7 +18,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   font-family: Consolas, monospace; font-size: 12px; color: #888;
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
-#error-count { color: #e06c75; font-weight: 600; }
+#error-count { color: #db3240; font-weight: 600; }
 .hdr-btn {
   background: none; border: 1px solid #444; color: #888;
   font-family: Consolas, monospace; font-size: 11px; padding: 1px 8px;
@@ -49,9 +49,9 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <span>errors</span>
       <span id="error-count">0 errors</span>
       <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
-        <button class="hdr-btn" id="btn-import">import</button>
-        <button class="hdr-btn" id="btn-export">export</button>
-        <span style="color: #444;">made with claude</span>
+        <button class="hdr-btn" id="btn-import">Import</button>
+        <button class="hdr-btn" id="btn-export">Export</button>
+        <span style="color: #222;">made with claude</span>
       </span>
     </div>
     <div id="error-list"><div id="no-errors">no errors</div></div>
@@ -86,16 +86,16 @@ require(['vs/editor/editor.main'], function () {
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
-        add:        [{name:'world',type:'number'},{name:'uID',type:'uid'}],
-        remove:     [{name:'world',type:'number'},{name:'uID',type:'uid'}],
-        color:      [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}],
-        set:        [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}],
-        activate:   [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
-        reset:      [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
-        create:     [{name:'world',type:'number'},{name:'name',type:'string'}],
-        delete:     [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
-        executable: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}],
-        whitelist:  [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}],
+        add:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds trigger to specified part.' },
+        remove:     { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Removes trigger from specified part.' },
+        color:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Changes trigger hitbox color.' },
+        set:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Applies specified trigger to specified part.' },
+        activate:   { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Activates specified trigger.' },
+        reset:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Resets specified trigger.' },
+        create:     { params: [{name:'world',type:'number'},{name:'name',type:'string'}], doc: 'Creates a new trigger.' },
+        delete:     { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Deletes specified trigger.' },
+        executable: { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}], doc: 'Adds a command to specified line of a specified trigger.' },
+        whitelist:  { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Manages trigger whitelist.' },
       },
       doc: 'Create, edit and add things to triggers.'
     }
@@ -154,7 +154,8 @@ require(['vs/editor/editor.main'], function () {
   function resolveParams(spec, tokens) {
     if (!spec.subtypes) return spec.params;
     const subtypeVal = tokens[1] ? tokens[1].value : null;
-    const extra = (subtypeVal && spec.subtypes[subtypeVal]) ? spec.subtypes[subtypeVal] : [];
+    const sub = subtypeVal && spec.subtypes[subtypeVal];
+    const extra = sub ? (sub.params ?? sub) : [];
     return [...spec.params, ...extra];
   }
 
