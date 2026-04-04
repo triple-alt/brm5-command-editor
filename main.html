@@ -1,0 +1,283 @@
+
+<style>
+#wrap { width:100%; height:520px; border-radius:8px; overflow:hidden; border:0.5px solid #454545; }
+</style>
+<div id="wrap"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
+<script>
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+
+  const LANG = 'cmdLang';
+
+  const VEHICLE_ENUM = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
+  const TRIGGER_SUB  = ['add','remove','color','set','activate','reset','create','delete','executable','whitelist'];
+  const MATERIALS    = ['Metal','Wood','Concrete','Glass','Plastic','Fabric','Sand','Rock'];
+
+  const CMDS = {
+    create:    {
+      params: [{name:'world',type:'number'},{name:'type',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}],
+      doc: 'Spawn an object in the given world at position (pX, pY, pZ).'
+    },
+    tween:     {
+      params: [{name:'world',type:'number'},{name:'pUID',type:'string'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}],
+      doc: 'Animate object pUID to position and rotation over duration seconds.'
+    },
+    color:     {
+      params: [{name:'world',type:'number'},{name:'pUID',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}],
+      doc: 'Set the colour of object pUID using RGB values (0–255).'
+    },
+    material:  {
+      params: [{name:'world',type:'number'},{name:'pUID',type:'string'},{name:'material',type:'enum',values:MATERIALS}],
+      doc: 'Apply a material to object pUID.'
+    },
+    reset:     { params: [], doc: 'Reset the entire scene to its default state.' },
+    explosion: {
+      params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}],
+      doc: 'Trigger an explosion at (pX, pY, pZ) affecting the given target type.'
+    },
+    move:      {
+      params: [{name:'world',type:'number'},{name:'pUID',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}],
+      doc: 'Instantly move and rotate object pUID.'
+    },
+    size:      {
+      params: [{name:'world',type:'number'},{name:'pUID',type:'string'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}],
+      doc: 'Resize object pUID.'
+    },
+    trigger:   {
+      params: [{name:'subtype',type:'enum',values:TRIGGER_SUB},{name:'world',type:'number'},{name:'uID',type:'string'},{name:'triggerName',type:'string'},{name:'extra',type:'string'}],
+      doc: 'Manage a trigger zone. subtype controls the operation.'
+    }
+  };
+
+  monaco.languages.register({ id: LANG });
+
+  monaco.languages.setMonarchTokensProvider(LANG, {
+    tokenizer: {
+      root: [
+        [/\b(create|tween|color|material|reset|explosion|move|size|trigger)\b/, 'keyword'],
+        [/\b(true|false)\b/, 'constant'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [/-?\d+(\.\d+)?/, 'number'],
+        [/"[^"]*"/, 'string'],
+        [/'[^']*'/, 'string'],
+      ]
+    }
+  });
+
+  function parseLine(line) {
+    const trimmed = line.trimStart();
+    const leadingSpaces = line.length - trimmed.length;
+    const tokens = [];
+    let i = 0;
+    while (i < trimmed.length) {
+      if (trimmed[i] === ' ') { i++; continue; }
+      const start = i;
+      while (i < trimmed.length && trimmed[i] !== ' ') i++;
+      tokens.push({ value: trimmed.slice(start, i), col: leadingSpaces + start + 1 });
+    }
+    return tokens;
+  }
+
+  function getActiveParamIndex(tokens, cursorCol) {
+    let paramIdx = -1;
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].col <= cursorCol) paramIdx = i - 1;
+    }
+    const last = tokens[tokens.length - 1];
+    if (last && cursorCol > last.col + last.value.length) paramIdx = tokens.length - 1;
+    return Math.max(0, paramIdx);
+  }
+
+  monaco.languages.registerSignatureHelpProvider(LANG, {
+    signatureHelpTriggerCharacters: [' ', '\t'],
+    signatureHelpRetriggerCharacters: [' '],
+    provideSignatureHelp(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const tokens = parseLine(line);
+      if (!tokens.length) return null;
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec || !spec.params.length) return null;
+
+      const cursorOffset = position.column;
+      const activeParam = getActiveParamIndex(tokens, cursorOffset);
+
+      const paramLabels = spec.params.map(p => {
+        if (p.type === 'enum') return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|…' : ''}`;
+        return `${p.name}: ${p.type}`;
+      });
+
+      return {
+        value: {
+          signatures: [{
+            label: `${cmdName}  ${paramLabels.join('  ')}`,
+            documentation: { value: spec.doc },
+            parameters: spec.params.map((p, idx) => ({
+              label: paramLabels[idx],
+              documentation: p.type === 'enum'
+                ? { value: `Valid values:\n${p.values.map(v => '• ' + v).join('\n')}` }
+                : { value: `Type: **${p.type}**` }
+            }))
+          }],
+          activeSignature: 0,
+          activeParameter: Math.min(activeParam, spec.params.length - 1)
+        },
+        dispose() {}
+      };
+    }
+  });
+
+  monaco.languages.registerCompletionItemProvider(LANG, {
+    triggerCharacters: [' ', '\t'],
+    provideCompletionItems(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const textBefore = line.slice(0, position.column - 1);
+      const tokens = parseLine(textBefore);
+      const wordInfo = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+        startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn
+      };
+
+      if (!tokens.length || (tokens.length === 1 && textBefore.trim() === tokens[0].value)) {
+        return {
+          suggestions: Object.entries(CMDS).map(([name, spec]) => ({
+            label: name,
+            kind: monaco.languages.CompletionItemKind.Function,
+            detail: spec.params.map(p => p.name).join(' '),
+            documentation: { value: spec.doc },
+            insertText: name,
+            range
+          }))
+        };
+      }
+
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) return { suggestions: [] };
+
+      const paramIdx = tokens.length - 1;
+      if (paramIdx < 0 || paramIdx >= spec.params.length) return { suggestions: [] };
+
+      const param = spec.params[paramIdx];
+      if (param.type !== 'enum') return { suggestions: [] };
+
+      return {
+        suggestions: param.values.map(v => ({
+          label: v,
+          kind: monaco.languages.CompletionItemKind.EnumMember,
+          insertText: v,
+          range
+        }))
+      };
+    }
+  });
+
+  monaco.languages.registerHoverProvider(LANG, {
+    provideHover(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const tokens = parseLine(line);
+      if (!tokens.length) return null;
+      const word = model.getWordAtPosition(position);
+      if (!word) return null;
+      const cmdName = tokens[0].value.toLowerCase();
+      if (word.word.toLowerCase() === cmdName) {
+        const spec = CMDS[cmdName];
+        if (!spec) return null;
+        const sig = `**${cmdName}** ${spec.params.map(p => p.name).join(' ')}`;
+        return { contents: [{ value: sig }, { value: spec.doc }] };
+      }
+      const spec = CMDS[cmdName];
+      if (!spec) return null;
+      const tokIdx = tokens.findIndex(t => t.col <= position.column && position.column <= t.col + t.value.length);
+      if (tokIdx <= 0) return null;
+      const param = spec.params[tokIdx - 1];
+      if (!param) return null;
+      const contents = [{ value: `**${param.name}** — \`${param.type}\`` }];
+      if (param.type === 'enum') contents.push({ value: `Valid values: ${param.values.join(', ')}` });
+      return { contents };
+    }
+  });
+
+  function validate(model) {
+    const markers = [];
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const line = model.getLineContent(ln);
+      const tokens = parseLine(line);
+      if (!tokens.length) continue;
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) {
+        markers.push({ severity: monaco.MarkerSeverity.Error, message: `Unknown command "${tokens[0].value}"`, startLineNumber: ln, endLineNumber: ln, startColumn: tokens[0].col, endColumn: tokens[0].col + tokens[0].value.length });
+        continue;
+      }
+      const args = tokens.slice(1);
+      for (let i = 0; i < args.length; i++) {
+        if (i >= spec.params.length) {
+          markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${args[i].value}" — ${cmdName} takes ${spec.params.length} argument(s)`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + args[i].value.length });
+          continue;
+        }
+        const param = spec.params[i];
+        const val = args[i].value;
+        if (param.type === 'number' && isNaN(Number(val))) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a number, got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'enum' && !param.values.includes(val)) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}"\nExpected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        }
+      }
+      if (args.length < spec.params.length) {
+        const missing = spec.params.slice(args.length).map(p => p.name);
+        const eol = line.length + 1;
+        markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: eol, endColumn: eol + 1 });
+      }
+    }
+    monaco.editor.setModelMarkers(model, LANG, markers);
+  }
+
+  const initialValue = [
+    'create 1 Cube 0 0 0',
+    'tween 1 obj_001 2.5 10 0 5 0 90 0',
+    'color 1 obj_001 255 128 0',
+    'material 1 obj_001 Metal',
+    'explosion 5 100 0 0 0 GroundVehicle',
+    'trigger add 1 zone_01 onEnter',
+    'reset',
+  ].join('\n');
+
+  const editor = monaco.editor.create(document.getElementById('wrap'), {
+    value: initialValue,
+    language: LANG,
+    theme: 'vs-dark',
+    fontSize: 14,
+    fontFamily: 'Consolas, "Courier New", monospace',
+    lineNumbers: 'on',
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    renderLineHighlight: 'line',
+    tabSize: 2,
+    wordWrap: 'off',
+    parameterHints: { enabled: true, cycle: true },
+    quickSuggestions: { other: true, comments: false, strings: false },
+    suggestOnTriggerCharacters: true,
+    acceptSuggestionOnEnter: 'on',
+    autoClosingBrackets: 'never',
+    autoClosingQuotes: 'never',
+  });
+
+  let debounce;
+  editor.onDidChangeModelContent(() => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => validate(editor.getModel()), 250);
+  });
+  validate(editor.getModel());
+
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
+    editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
+  });
+
+  editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
+    editor.trigger('keyboard', 'editor.action.triggerParameterHints', {});
+  });
+});
+</script>
