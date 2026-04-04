@@ -19,6 +19,12 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
 #error-count { color: #e06c75; font-weight: 600; }
+.hdr-btn {
+  background: none; border: 1px solid #444; color: #888;
+  font-family: Consolas, monospace; font-size: 11px; padding: 1px 8px;
+  cursor: pointer; border-radius: 3px;
+}
+.hdr-btn:hover { background: #2a2a2a; color: #abb2bf; border-color: #555; }
 #error-list { flex: 1; overflow-y: auto; padding: 4px 0; }
 .err-row {
   display: grid; grid-template-columns: 28px 60px 60px 1fr;
@@ -42,7 +48,11 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     <div id="error-header">
       <span>problems</span>
       <span id="error-count">0 errors</span>
-      <span style="margin-left: auto; color: #444;">made with claude</span>
+      <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+        <button class="hdr-btn" id="btn-import">import</button>
+        <button class="hdr-btn" id="btn-export">export</button>
+        <span style="color: #444;">made with claude</span>
+      </span>
     </div>
     <div id="error-list"><div id="no-errors">no problems detected</div></div>
   </div>
@@ -73,8 +83,7 @@ require(['vs/editor/editor.main'], function () {
     move:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part.' },
     size:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
     wait:      { params: [{name:'duration',type:'number'}], doc: 'Waits a set duration before proceeding.' },
-    duplicate: { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'}]},
-    trigger: { 
+    trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
         add:        [{name:'world',type:'number'},{name:'uID',type:'uid'}],
@@ -96,7 +105,7 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
       root: [
-        [/\b(create|tween|duplicate|color|material|reset|explosion|move|size|trigger|wait)\b/, 'keyword'],
+        [/\b(create|tween|color|material|reset|explosion|move|size|trigger|wait)\b/, 'keyword'],
         [/\b(true|false)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
@@ -467,6 +476,34 @@ require(['vs/editor/editor.main'], function () {
 
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const content = editor.getValue();
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'script.cmd';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('btn-import').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.cmd,.txt';
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        editor.setValue(e.target.result);
+        editor.setPosition({ lineNumber: 1, column: 1 });
+        editor.focus();
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  });
 });
 </script>
 </body>
