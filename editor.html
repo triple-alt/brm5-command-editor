@@ -125,6 +125,31 @@ require(['vs/editor/editor.main'], function () {
     }
   };
 
+  monaco.languages.registerInlayHintsProvider(LANG, {
+  provideInlayHints(model) {
+    const hints = [];
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const line = model.getLineContent(ln);
+      const tokens = getTokens(line);
+      if (!tokens.length) continue;
+      const spec = CMDS[tokens[0].value.toLowerCase()];
+      if (!spec) continue;
+      const params = resolveParams(spec, tokens);
+      const args = tokens.slice(1);
+      args.forEach((arg, i) => {
+        if (i >= params.length) return;
+        hints.push({
+          kind: monaco.languages.InlayHintKind.Parameter,
+          position: { lineNumber: ln, column: arg.col },
+          label: params[i].name + ':',
+          paddingRight: true,
+        });
+      });
+    }
+    return { hints, dispose() {} };
+  }
+});
+
   monaco.languages.register({ id: LANG });
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
@@ -140,6 +165,7 @@ require(['vs/editor/editor.main'], function () {
       ]
     }
   });
+  
 
   function parseLine(line) {
     const trimmed = line.trimStart();
@@ -646,7 +672,8 @@ require(['vs/editor/editor.main'], function () {
   }
 
   function updateTweenFromCursor() {
-    const ln = editor.getPosition().lineNumber;
+    const sel = editor.getSelection();
+    const ln = (sel && !sel.isEmpty()) ? sel.startLineNumber : editor.getPosition().lineNumber;
     const line = editor.getModel().getLineContent(ln);
     const parsed = parseTweenLine(line);
     const changed = JSON.stringify(parsed) !== JSON.stringify(tweenData);
