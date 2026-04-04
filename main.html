@@ -1,54 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMD Editor</title>
 <style>
-#wrap { width:100%; height:700px; border-radius:8px; overflow:hidden; border:0.5px solid #454545; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
+#app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
+#editor-wrap { flex: 1; min-height: 0; }
+#error-panel {
+  height: 160px; background: #111; border-top: 1px solid #333;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#error-header {
+  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
+  font-family: Consolas, monospace; font-size: 12px; color: #888;
+  display: flex; align-items: center; gap: 8px;
+}
+#error-count { color: #e06c75; font-weight: 600; }
+#error-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.err-row {
+  display: grid; grid-template-columns: 28px 60px 60px 1fr;
+  padding: 3px 12px; font-family: Consolas, monospace; font-size: 12px;
+  cursor: pointer; gap: 8px; align-items: center;
+}
+.err-row:hover { background: #1e1e1e; }
+.err-icon { text-align: center; font-size: 11px; }
+.err-icon.error { color: #e06c75; }
+.err-icon.warning { color: #e5c07b; }
+.err-icon.hint { color: #61afef; }
+.err-pos { color: #666; }
+.err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
 </style>
-<div id="wrap"></div>
+</head>
+<body>
+<div id="app">
+  <div id="editor-wrap"></div>
+  <div id="error-panel">
+    <div id="error-header">
+      <span>problems</span>
+      <span id="error-count">0 errors</span>
+    </div>
+    <div id="error-list"><div id="no-errors">no problems detected</div></div>
+  </div>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
 <script>
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' } });
 require(['vs/editor/editor.main'], function () {
 
   const LANG = 'cmdLang';
-
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const VEHICLE_ENUM = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
   const TRIGGER_SUB  = ['add','remove','color','set','activate','reset','create','delete','executable','whitelist'];
-  const MATERIALS = ["asphalt_rough", "asphalt_snow", "asphalt_snow2", "asphalt_snow_paint", "asphalt_worn1", "asphalt_worn2", "asphalt_worn3", "brick_clad", "brick_clad10", "brick_clad11", "brick_clad2", "brick_clad3", "brick_clad4", "brick_clad5", "brick_clad5_clean", "brick_clad6", "brick_clad7", "brick_clad8", "brick_clad9", "brick_default_dirty", "brick_default_dirty2", "brick_desert", "brick_maya1", "brick_maya2", "brick_maya3", "brick_maya4", "brick_modern", "brick_old", "brick_rough", "cobble_rubble1", "cobble_rubble2", "cobblestone_rocks1", "concrete_ceiling", "concrete_ceiling2", "concrete_clad", "concrete_clad2", "concrete_clad_dirty", "concrete_default_dirty", "concrete_drywall", "concrete_plaster1", "concrete_plaster2", "concrete_plaster2_stained", "concrete_plaster3", "concrete_plaster4", "concrete_plaster5", "concrete_plaster6", "concrete_plaster7", "concrete_plaster8", "concrete_plate", "concrete_plate2", "concrete_roof", "concrete_roof2", "concrete_roof3", "concrete_rough", "concrete_shingle", "concrete_slatetiles", "concrete_sleepers", "concrete_sleepers_stained", "concrete_stucco", "concrete_tile", "concrete_tile2", "concrete_tile2_snow", "concrete_tile3", "concrete_tile4", "concrete_tile5", "concrete_tile5_snow", "concrete_tile5_snow2", "concrete_tile6", "concrete_worn", "concrete_worn2", "concrete_worn3", "concrete_worn4", "concrete_worn4_snow", "corrodedmetal_rust", "corrodedmetal_rust2", "corrodedmetal_rust3", "corrodedmetal_rust3_snow", "corrodedmetal_sheets", "corrodedmetal_sheets2", "corrodedmetal_sheets3", "diamondplate_oldthread", "fabric_carpet1", "fabric_carpet2", "fabric_carpet3", "fabric_worn1", "glass_broken", "grass_tropical", "ground_dirt", "ground_dirt2", "leafygrass_grass", "leafygrass_lawn", "leather_zombie_1", "marble_bigtiles", "marble_checker", "marble_polished", "marble_polished2", "marble_polished3", "marble_smalltiles", "marble_smalltiles2", "marble_smalltiles2_dirty", "marble_smalltiles3", "marble_tiles", "marble_tiles10", "marble_tiles2", "marble_tiles3", "marble_tiles4", "marble_tiles5", "marble_tiles6", "marble_tiles7", "marble_tiles8", "marble_tiles9", "marble_vinyltile", "marble_vinyltile_stained", "marble_whiterectangle", "metal_clad", "metal_corrugated", "metal_corrugated2", "metal_corrugated3", "metal_corrugated4", "metal_corrugated5", "metal_corrugated6", "metal_dented", "metal_diamondsheet", "metal_painted", "metal_siding", "metal_worn", "metal_worn2", "metal_worn2_snow1", "metal_worn2_snow2", "mud_ground1", "mud_ground1_snow", "mud_tropical", "pebble_gravel1", "plastic_cautiontape", "plastic_cautiontape2", "plastic_tactile", "plastic_tactile_snow", "plastic_tarp", "plastic_trash", "plastic_trashbags", "plastic_worn1", "rock_cliff", "rock_cliff2", "rock_cliff3", "rock_tropical1", "rock_tropical2", "sand_road1", "sand_road2", "sand_tropical", "sand_tropical2", "sand_tropical3", "sand_tropical4", "wood_bark1", "wood_bark2", "wood_bark3", "wood_bark4", "wood_bark5", "wood_compositedeck", "wood_log", "wood_painted", "wood_painted2", "wood_particleboard", "wood_particleboard2", "wood_polished", "wood_shingle1", "wood_siding", "wood_sliding2", "wood_sliding3", "wood_sliding4", "wood_sliding5", "wood_sliding6", "wood_sliding6_snow2", "woodplanks_fancyfloor", "woodplanks_fancyfloor2", "woodplanks_fancyfloor3", "woodplanks_fancyfloor4", "woodplanks_laminate", "woodplanks_laminate2", "woodplanks_laminate3", "woodplanks_laminate4", "woodplanks_plyplates"];
+  const MATERIALS = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad10","brick_clad11","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles10","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
 
   const CMDS = {
-    create:    {
-      params: [{name:'world',type:'number'},{name:'type',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}],
-      doc: 'Spawn an object in the given world at position (pX, pY, pZ).'
-    },
-    tween:     {
-      params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}],
-      doc: 'Animate object pUID to position and rotation over duration seconds.'
-    },
-    color:     {
-      params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}],
-      doc: 'Set the colour of object pUID using RGB values (0–255).'
-    },
-    material:  {
-      params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}],
-      doc: 'Apply a material to object pUID.'
-    },
-    reset:     { params: [], doc: 'Resets the trigger' },
-    explosion: {
-      params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}],
-      doc: 'Creates an explosion at the given coordinates'
-    },
-    move:      {
-      params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}],
-      doc: 'Instantly move and rotate object pUID.'
-    },
-    size:      {
-      params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}],
-      doc: 'Resize object pUID.'
-    },
-    trigger:   {
-      params: [{name:'subtype',type:'enum',values:TRIGGER_SUB},{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'}],
-      doc: 'Manage a trigger zone. subtype controls the operation.'
-    }
+    create:    { params: [{name:'world',type:'number'},{name:'type',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).' },
+    tween:     { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.' },
+    color:     { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0-255).' },
+    material:  { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to object pUID.' },
+    reset:     { params: [], doc: 'Reset the entire scene to its default state.' },
+    explosion: { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) affecting the given target type.' },
+    move:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Instantly move and rotate object pUID.' },
+    size:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize object pUID.' },
+    trigger:   { params: [{name:'subtype',type:'enum',values:TRIGGER_SUB},{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'extra',type:'string'}], doc: 'Manage a trigger zone. subtype controls the operation.' }
   };
 
   monaco.languages.register({ id: LANG });
@@ -59,6 +78,7 @@ require(['vs/editor/editor.main'], function () {
         [/\b(create|tween|color|material|reset|explosion|move|size|trigger)\b/, 'keyword'],
         [/\b(true|false)\b/, 'constant'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
         [/-?\d+(\.\d+)?/, 'number'],
         [/"[^"]*"/, 'string'],
         [/'[^']*'/, 'string'],
@@ -100,15 +120,13 @@ require(['vs/editor/editor.main'], function () {
       const cmdName = tokens[0].value.toLowerCase();
       const spec = CMDS[cmdName];
       if (!spec || !spec.params.length) return null;
-
       const cursorOffset = position.column;
       const activeParam = getActiveParamIndex(tokens, cursorOffset);
-
       const paramLabels = spec.params.map(p => {
-        if (p.type === 'enum') return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|…' : ''}`;
+        if (p.type === 'enum') return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|...' : ''}`;
+        if (p.type === 'uid') return `${p.name}: uid`;
         return `${p.name}: ${p.type}`;
       });
-
       return {
         value: {
           signatures: [{
@@ -117,8 +135,10 @@ require(['vs/editor/editor.main'], function () {
             parameters: spec.params.map((p, idx) => ({
               label: paramLabels[idx],
               documentation: p.type === 'enum'
-                ? { value: `Valid values:\n${p.values.map(v => '• ' + v).join('\n')}` }
-                : { value: `Type: **${p.type}**` }
+                ? { value: `Valid values:\n${p.values.map(v => '- ' + v).join('\n')}` }
+                : p.type === 'uid'
+                ? { value: 'Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' }
+                : { value: `Type: ${p.type}` }
             }))
           }],
           activeSignature: 0,
@@ -140,7 +160,6 @@ require(['vs/editor/editor.main'], function () {
         startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
         startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn
       };
-
       if (!tokens.length || (tokens.length === 1 && !textBefore.endsWith(' '))) {
         return {
           suggestions: Object.entries(CMDS).map(([name, spec]) => ({
@@ -153,17 +172,13 @@ require(['vs/editor/editor.main'], function () {
           }))
         };
       }
-
       const cmdName = tokens[0].value.toLowerCase();
       const spec = CMDS[cmdName];
       if (!spec) return { suggestions: [] };
-
       const paramIdx = tokens.length - 1;
       if (paramIdx < 0 || paramIdx >= spec.params.length) return { suggestions: [] };
-
       const param = spec.params[paramIdx];
       if (param.type !== 'enum') return { suggestions: [] };
-
       return {
         suggestions: param.values.map(v => ({
           label: v,
@@ -175,7 +190,7 @@ require(['vs/editor/editor.main'], function () {
     }
   });
 
-monaco.languages.registerHoverProvider(LANG, {
+  monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const tokens = parseLine(line);
@@ -197,12 +212,59 @@ monaco.languages.registerHoverProvider(LANG, {
       if (!param) return null;
       const contents = [{ value: `**${param.name}** — \`${param.type}\`` }];
       if (param.type === 'enum') contents.push({ value: `Valid values: ${param.values.join(', ')}` });
-      else if (param.type === 'uid') contents.push({ value: `Expected format: \`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\`` });
+      else if (param.type === 'uid') contents.push({ value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`' });
       return { contents };
     }
   });
 
-  function validate(model) {
+  let currentMarkers = [];
+
+  function severityLabel(s) {
+    if (s === monaco.MarkerSeverity.Error)   return { label: 'x', cls: 'error',   text: 'error' };
+    if (s === monaco.MarkerSeverity.Warning) return { label: '!', cls: 'warning', text: 'warning' };
+    return { label: 'i', cls: 'hint', text: 'hint' };
+  }
+
+  function updateErrorPanel(markers, editorRef) {
+    currentMarkers = markers;
+    const list = document.getElementById('error-list');
+    const count = document.getElementById('error-count');
+    const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error).length;
+    const warnings = markers.filter(m => m.severity === monaco.MarkerSeverity.Warning).length;
+
+    let countStr = '';
+    if (errors)   countStr += `${errors} error${errors>1?'s':''}`;
+    if (warnings) countStr += (countStr ? ', ' : '') + `${warnings} warning${warnings>1?'s':''}`;
+    count.textContent = countStr || '0 errors';
+    count.style.color = errors ? '#e06c75' : warnings ? '#e5c07b' : '#4a4a4a';
+
+    if (!markers.length) {
+      list.innerHTML = '<div id="no-errors">no problems detected</div>';
+      return;
+    }
+
+    list.innerHTML = markers.map((m, i) => {
+      const s = severityLabel(m.severity);
+      const msg = m.message.replace(/\n/g, ' ');
+      return `<div class="err-row" data-idx="${i}">
+        <span class="err-icon ${s.cls}">${s.label}</span>
+        <span class="err-pos">Ln ${m.startLineNumber}</span>
+        <span class="err-pos">Col ${m.startColumn}</span>
+        <span class="err-msg" title="${msg}">[${s.text}] ${msg}</span>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.err-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const m = currentMarkers[+row.dataset.idx];
+        editorRef.setPosition({ lineNumber: m.startLineNumber, column: m.startColumn });
+        editorRef.revealLineInCenter(m.startLineNumber);
+        editorRef.focus();
+      });
+    });
+  }
+
+  function validate(model, editorRef) {
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
@@ -217,7 +279,7 @@ monaco.languages.registerHoverProvider(LANG, {
       const args = tokens.slice(1);
       for (let i = 0; i < args.length; i++) {
         if (i >= spec.params.length) {
-          markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${args[i].value}" — ${cmdName} takes ${spec.params.length} argument(s)`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + args[i].value.length });
+          markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${args[i].value}" - ${cmdName} takes ${spec.params.length} argument(s)`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + args[i].value.length });
           continue;
         }
         const param = spec.params[i];
@@ -225,7 +287,9 @@ monaco.languages.registerHoverProvider(LANG, {
         if (param.type === 'number' && isNaN(Number(val))) {
           markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a number, got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
         } else if (param.type === 'enum' && !param.values.includes(val)) {
-          markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}"\nExpected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}". Expected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'uid' && !UUID_RE.test(val)) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID (e.g. f9759893-7a73-41a7-a593-4a048126efc9), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
         }
       }
       if (args.length < spec.params.length) {
@@ -233,18 +297,22 @@ monaco.languages.registerHoverProvider(LANG, {
         const eol = line.length + 1;
         markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: eol, endColumn: eol + 1 });
       }
-      if (param.type === 'uid' && !UUID_RE.test(val)) {
-        markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID (e.g. f9759893-7a73-41a7-a593-4a048126efc9), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
-      }
     }
     monaco.editor.setModelMarkers(model, LANG, markers);
+    updateErrorPanel(markers, editorRef);
   }
 
   const initialValue = [
-    '// Start typing here...'
+    'create 1 Cube 0 0 0',
+    'tween 1 f9759893-7a73-41a7-a593-4a048126efc9 2.5 10 0 5 0 90 0',
+    'color 1 f9759893-7a73-41a7-a593-4a048126efc9 255 128 0',
+    'material 1 f9759893-7a73-41a7-a593-4a048126efc9 metal_worn',
+    'explosion 5 100 0 0 0 GroundVehicle',
+    'trigger add 1 f9759893-7a73-41a7-a593-4a048126efc9 onEnter',
+    'reset',
   ].join('\n');
 
-  const editor = monaco.editor.create(document.getElementById('wrap'), {
+  const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
     value: initialValue,
     language: LANG,
     theme: 'vs-dark',
@@ -267,16 +335,17 @@ monaco.languages.registerHoverProvider(LANG, {
   let debounce;
   editor.onDidChangeModelContent(() => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => validate(editor.getModel()), 250);
+    debounce = setTimeout(() => validate(editor.getModel(), editor), 250);
   });
-  validate(editor.getModel());
+  validate(editor.getModel(), editor);
 
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
     editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
   });
-
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
     editor.trigger('keyboard', 'editor.action.triggerParameterHints', {});
   });
 });
 </script>
+</body>
+</html>
