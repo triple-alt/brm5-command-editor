@@ -73,7 +73,8 @@ require(['vs/editor/editor.main'], function () {
     move:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part.' },
     size:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
     wait:      { params: [{name:'duration',type:'number'}], doc: 'Waits a set duration before proceeding.' },
-    trigger: {
+    duplicate: { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'}]},
+    trigger: { 
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
         add:        [{name:'world',type:'number'},{name:'uID',type:'uid'}],
