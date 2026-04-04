@@ -46,7 +46,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   <div id="editor-wrap"></div>
   <div id="error-panel">
     <div id="error-header">
-      <span>problems</span>
+      <span>errors</span>
       <span id="error-count">0 errors</span>
       <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
         <button class="hdr-btn" id="btn-import">import</button>
@@ -54,7 +54,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
         <span style="color: #444;">made with claude</span>
       </span>
     </div>
-    <div id="error-list"><div id="no-errors">no problems detected</div></div>
+    <div id="error-list"><div id="no-errors">no errors</div></div>
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
@@ -379,7 +379,7 @@ require(['vs/editor/editor.main'], function () {
     if (warnings) countStr += (countStr ? ', ' : '') + `${warnings} warning${warnings>1?'s':''}`;
     count.textContent = countStr || '0 errors';
     count.style.color = errors ? '#e06c75' : warnings ? '#e5c07b' : '#4a4a4a';
-    if (!markers.length) { list.innerHTML = '<div id="no-errors">no problems detected</div>'; return; }
+    if (!markers.length) { list.innerHTML = '<div id="no-errors">no errors</div>'; return; }
     list.innerHTML = markers.map((m, i) => {
       const s = severityLabel(m.severity);
       const msg = m.message.replace(/\n/g, ' ');
@@ -455,7 +455,7 @@ require(['vs/editor/editor.main'], function () {
     updateErrorPanel(markers, editorRef);
   }
 
-  const initialValue = '// Start typing here';
+  const initialValue = 'create 1 part 1 1 1';
   const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
     value: initialValue, language: LANG, theme: 'vs-dark', fontSize: 14,
     fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
