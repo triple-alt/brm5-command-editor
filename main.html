@@ -1,6 +1,5 @@
-
 <style>
-#wrap { width:100%; height:520px; border-radius:8px; overflow:hidden; border:0.5px solid #454545; }
+#wrap { width:100%; height:700px; border-radius:8px; overflow:hidden; border:0.5px solid #454545; }
 </style>
 <div id="wrap"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
@@ -140,7 +139,7 @@ require(['vs/editor/editor.main'], function () {
         startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn
       };
 
-      if (!tokens.length || (tokens.length === 1 && textBefore.trim() === tokens[0].value)) {
+      if (!tokens.length || (tokens.length === 1 && !textBefore.endsWith(' '))) {
         return {
           suggestions: Object.entries(CMDS).map(([name, spec]) => ({
             label: name,
