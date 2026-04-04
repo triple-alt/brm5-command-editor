@@ -482,7 +482,7 @@ require(['vs/editor/editor.main'], function () {
     const blob = new Blob([content], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'script.cmd';
+    a.download = 'script.txt';
     a.click();
     URL.revokeObjectURL(a.href);
   });
@@ -490,7 +490,7 @@ require(['vs/editor/editor.main'], function () {
   document.getElementById('btn-import').addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.cmd,.txt';
+    input.accept = '.txt';
     input.addEventListener('change', () => {
       const file = input.files[0];
       if (!file) return;
