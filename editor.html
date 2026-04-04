@@ -548,7 +548,7 @@ require(['vs/editor/editor.main'], function () {
     const scale = Math.min(w, h) * 0.28;
     const maxCoord = Math.max(Math.abs(tweenData.pX || 0), Math.abs(tweenData.pY || 0), Math.abs(tweenData.pZ || 0), 1) * 1.6;
     const startX = cx, startY = cy;
-    const endX = cx + ((tweenData.pX || 0) / maxCoord) * scale;
+    const endX = cx + ((tweenData.pZ || 0) / maxCoord) * scale;
     const endY = cy - ((tweenData.pY || 0) / maxCoord) * scale;
     const curX = startX + (endX - startX) * e;
     const curY = startY + (endY - startY) * e;
@@ -594,8 +594,9 @@ require(['vs/editor/editor.main'], function () {
     ctx.textAlign = 'left';
     const lx = ((tweenData.pX || 0) * e).toFixed(1);
     const ly = ((tweenData.pY || 0) * e).toFixed(1);
+    const lz = ((tweenData.pZ || 0) * e).toFixed(1);
     ctx.fillStyle = '#444'; ctx.font = '10px Consolas, monospace';
-    ctx.fillText(`x:${lx} y:${ly}`, 12, 14);
+    ctx.fillText(`x:${lx} y:${ly} z:${lz}`, 12, 14);
   }
 
   function animateTween() {
