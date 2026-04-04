@@ -56,9 +56,7 @@ require(['vs/editor/editor.main'], function () {
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const VAR_RE  = /^%[a-zA-Z_]\w*$/;
 
-  function isValidUID(val) {
-    return UUID_RE.test(val) || VAR_RE.test(val);
-  }
+  function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
 
   const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
   const TRIGGER_SUB     = ['add','remove','color','set','activate','reset','create','delete','executable','whitelist'];
@@ -111,6 +109,7 @@ require(['vs/editor/editor.main'], function () {
     }
   });
 
+  // Basic tokenizer — splits on spaces
   function parseLine(line) {
     const trimmed = line.trimStart();
     const leadingSpaces = line.length - trimmed.length;
@@ -123,6 +122,34 @@ require(['vs/editor/editor.main'], function () {
       tokens.push({ value: trimmed.slice(start, i), col: leadingSpaces + start + 1 });
     }
     return tokens;
+  }
+
+  // Returns index of first 'command' type param, or -1
+  function getRestParamIndex(params) {
+    return params.findIndex(p => p.type === 'command');
+  }
+
+  // Like parseLine but merges everything from restTokenIdx onward into one token
+  function parseLineWithRest(line, restTokenIdx) {
+    const tokens = parseLine(line);
+    if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
+    const restCol = tokens[restTokenIdx].col;
+    const restVal = line.slice(restCol - 1); // col is 1-based
+    return [...tokens.slice(0, restTokenIdx), { value: restVal, col: restCol, isRest: true }];
+  }
+
+  // Get fully resolved tokens for a line, merging rest if needed
+  function getTokens(line) {
+    const raw = parseLine(line);
+    if (!raw.length) return raw;
+    const cmdName = raw[0].value.toLowerCase();
+    const spec = CMDS[cmdName];
+    if (!spec) return raw;
+    const params = resolveParams(spec, raw);
+    const restIdx = getRestParamIndex(params);
+    if (restIdx < 0) return raw;
+    // restTokenIdx in the token array = restIdx + 1 (for the command token itself)
+    return parseLineWithRest(line, restIdx + 1);
   }
 
   function resolveParams(spec, tokens) {
@@ -158,19 +185,95 @@ require(['vs/editor/editor.main'], function () {
     return { value: `Type: ${p.type}` };
   }
 
+  // Given the nested command text (everything after the fixed params),
+  // return completion suggestions for wherever the cursor is within it.
+  function nestedCommandSuggestions(nestedText, cursorCol, range) {
+    const tokens = parseLine(nestedText);
+    const textUpToCursor = nestedText.slice(0, cursorCol);
+    const tokensUpToCursor = parseLine(textUpToCursor);
+
+    // No command typed yet or still typing command name
+    if (!tokensUpToCursor.length || (tokensUpToCursor.length === 1 && !textUpToCursor.endsWith(' '))) {
+      return Object.entries(CMDS).map(([name, spec]) => ({
+        label: name,
+        kind: monaco.languages.CompletionItemKind.Function,
+        detail: spec.params.map(p => p.name).join(' '),
+        documentation: { value: spec.doc },
+        insertText: name,
+        range
+      }));
+    }
+
+    const nestedCmdName = tokensUpToCursor[0].value.toLowerCase();
+    const nestedSpec = CMDS[nestedCmdName];
+    if (!nestedSpec) return [];
+
+    const nestedParams = resolveParams(nestedSpec, tokensUpToCursor);
+    const paramIdx = textUpToCursor.endsWith(' ') ? tokensUpToCursor.length - 1 : tokensUpToCursor.length - 2;
+    if (paramIdx < 0 || paramIdx >= nestedParams.length) return [];
+
+    const param = nestedParams[paramIdx];
+    if (param.type !== 'enum') return [];
+
+    return param.values.map(v => ({
+      label: v,
+      kind: monaco.languages.CompletionItemKind.EnumMember,
+      insertText: v,
+      range
+    }));
+  }
+
+  // Given nested command text, return signature help
+  function nestedCommandSignature(nestedText, cursorCol, outerCmdName) {
+    const tokens = parseLine(nestedText);
+    if (!tokens.length) return null;
+    const nestedCmdName = tokens[0].value.toLowerCase();
+    const spec = CMDS[nestedCmdName];
+    if (!spec) return null;
+    const params = resolveParams(spec, tokens);
+    if (!params.length) return null;
+    const activeParam = getActiveParamIndex(parseLine(nestedText.slice(0, cursorCol)), cursorCol);
+    const paramLabels = params.map(paramLabel);
+    return {
+      value: {
+        signatures: [{
+          label: `[${outerCmdName}] ${nestedCmdName}  ${paramLabels.join('  ')}`,
+          documentation: { value: spec.doc },
+          parameters: params.map((p, idx) => ({ label: paramLabels[idx], documentation: paramDoc(p) }))
+        }],
+        activeSignature: 0,
+        activeParameter: Math.min(activeParam, params.length - 1)
+      },
+      dispose() {}
+    };
+  }
+
   monaco.languages.registerSignatureHelpProvider(LANG, {
     signatureHelpTriggerCharacters: [' ', '\t'],
     signatureHelpRetriggerCharacters: [' '],
     provideSignatureHelp(model, position) {
       const line = model.getLineContent(position.lineNumber);
-      const tokens = parseLine(line);
+      const tokens = getTokens(line);
       if (!tokens.length) return null;
       const cmdName = tokens[0].value.toLowerCase();
       const spec = CMDS[cmdName];
       if (!spec) return null;
       const params = resolveParams(spec, tokens);
       if (!params.length) return null;
+
       const activeParam = getActiveParamIndex(tokens, position.column);
+      const currentParam = params[Math.min(activeParam, params.length - 1)];
+
+      // If cursor is inside the command slot, delegate to nested signature
+      if (currentParam && currentParam.type === 'command') {
+        const restToken = tokens.find(t => t.isRest);
+        if (restToken) {
+          const nestedText = restToken.value;
+          const cursorInNested = position.column - restToken.col;
+          return nestedCommandSignature(nestedText, cursorInNested, cmdName);
+        }
+      }
+
       const paramLabels = params.map(paramLabel);
       return {
         value: {
@@ -192,7 +295,7 @@ require(['vs/editor/editor.main'], function () {
     provideCompletionItems(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const textBefore = line.slice(0, position.column - 1);
-      const tokens = parseLine(textBefore);
+      const rawTokensBefore = parseLine(textBefore);
       const wordInfo = model.getWordUntilPosition(position);
       const range = {
         startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
@@ -200,8 +303,8 @@ require(['vs/editor/editor.main'], function () {
         endColumn: wordInfo.endColumn || position.column
       };
 
-      // No command typed yet — suggest commands
-      if (!tokens.length || (tokens.length === 1 && !textBefore.endsWith(' '))) {
+      // No command typed yet
+      if (!rawTokensBefore.length || (rawTokensBefore.length === 1 && !textBefore.endsWith(' '))) {
         return {
           suggestions: Object.entries(CMDS).map(([name, spec]) => ({
             label: name,
@@ -214,35 +317,39 @@ require(['vs/editor/editor.main'], function () {
         };
       }
 
-      const cmdName = tokens[0].value.toLowerCase();
+      const cmdName = rawTokensBefore[0].value.toLowerCase();
       const spec = CMDS[cmdName];
       if (!spec) return { suggestions: [] };
 
-      const params = resolveParams(spec, tokens);
+      const params = resolveParams(spec, rawTokensBefore);
+      const restIdx = getRestParamIndex(params);
 
-      // Figure out which param slot the cursor is in.
-      // If textBefore ends with a space the user has finished the last token
-      // and is starting a new slot — use tokens.length - 1 (0-based after cmd).
-      // If they are mid-word use tokens.length - 2.
-      const paramIdx = textBefore.endsWith(' ') ? tokens.length - 1 : tokens.length - 2;
-
-      if (paramIdx < 0 || paramIdx >= params.length) return { suggestions: [] };
-
-      const param = params[paramIdx];
-
-      // Suggest commands for the nested-command param
-      if (param.type === 'command') {
-        return {
-          suggestions: Object.keys(CMDS).map(name => ({
-            label: name,
-            kind: monaco.languages.CompletionItemKind.Function,
-            documentation: { value: CMDS[name].doc },
-            insertText: name,
-            range
-          }))
-        };
+      // If there's a command param, check if cursor is at or past it
+      if (restIdx >= 0) {
+        // restIdx in token array = restIdx + 1 (for cmd token)
+        const restTokenIdx = restIdx + 1;
+        const rawAll = parseLine(textBefore);
+        // Is the cursor in or past the rest param slot?
+        if (rawAll.length > restTokenIdx || (rawAll.length === restTokenIdx && textBefore.endsWith(' '))) {
+          // Everything from the rest param start to cursor is the nested command text
+          const restTokens = rawAll.slice(restTokenIdx);
+          let nestedText, cursorInNested;
+          if (restTokens.length === 0) {
+            nestedText = '';
+            cursorInNested = 0;
+          } else {
+            const restStartCol = restTokens[0].col - 1; // 0-based
+            nestedText = textBefore.slice(restStartCol);
+            cursorInNested = nestedText.length;
+          }
+          const suggestions = nestedCommandSuggestions(nestedText, cursorInNested, range);
+          return { suggestions };
+        }
       }
 
+      const paramIdx = textBefore.endsWith(' ') ? rawTokensBefore.length - 1 : rawTokensBefore.length - 2;
+      if (paramIdx < 0 || paramIdx >= params.length) return { suggestions: [] };
+      const param = params[paramIdx];
       if (param.type !== 'enum') return { suggestions: [] };
 
       return {
@@ -259,7 +366,7 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
-      const tokens = parseLine(line);
+      const tokens = getTokens(line);
       if (!tokens.length) return null;
       const word = model.getWordAtPosition(position);
       if (!word) return null;
@@ -277,6 +384,32 @@ require(['vs/editor/editor.main'], function () {
       if (tokIdx <= 0) return null;
       const param = params[tokIdx - 1];
       if (!param) return null;
+
+      // If hovering inside the rest/command token, try to give nested hover
+      if (param.type === 'command' && tokens[tokIdx].isRest) {
+        const restToken = tokens[tokIdx];
+        const offsetInRest = position.column - restToken.col;
+        const nestedTokens = parseLine(restToken.value);
+        if (nestedTokens.length) {
+          const nestedCmdName = nestedTokens[0].value.toLowerCase();
+          const nestedSpec = CMDS[nestedCmdName];
+          if (nestedSpec) {
+            // Find which nested token is under cursor
+            const nestedTokIdx = nestedTokens.findIndex(t => t.col - 1 <= offsetInRest && offsetInRest <= t.col - 1 + t.value.length);
+            if (nestedTokIdx === 0) {
+              return { contents: [{ value: `**${nestedCmdName}** (nested)` }, { value: nestedSpec.doc }] };
+            }
+            if (nestedTokIdx > 0) {
+              const nestedParams = resolveParams(nestedSpec, nestedTokens);
+              const nestedParam = nestedParams[nestedTokIdx - 1];
+              if (nestedParam) {
+                return { contents: [{ value: `**${nestedParam.name}** — \`${nestedParam.type}\`` }, paramDoc(nestedParam)] };
+              }
+            }
+          }
+        }
+      }
+
       const header = `**${param.name}** — \`${param.type}\`` + (param.default !== undefined ? ` (default: \`${param.default}\`)` : '');
       return { contents: [{ value: header }, paramDoc(param)] };
     }
@@ -329,7 +462,7 @@ require(['vs/editor/editor.main'], function () {
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
-      const tokens = parseLine(line);
+      const tokens = getTokens(line);
       if (!tokens.length) continue;
       const cmdName = tokens[0].value.toLowerCase();
       const spec = CMDS[cmdName];
@@ -351,11 +484,42 @@ require(['vs/editor/editor.main'], function () {
         } else if (param.type === 'enum' && !param.values.includes(val)) {
           markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}". Expected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
         } else if (param.type === 'uid' && !isValidUID(val)) {
-          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID (e.g. f9759893-7a73-41a7-a593-4a048126efc9) or variable (e.g. %myVar), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID or variable (e.g. %myVar), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
         } else if (param.type === 'command') {
+          // Validate the nested command name
           const nestedTokens = parseLine(val);
-          if (nestedTokens.length && !CMDS[nestedTokens[0].value.toLowerCase()]) {
-            markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not a valid command. Expected one of: ${Object.keys(CMDS).join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+          if (nestedTokens.length) {
+            const nestedCmdName = nestedTokens[0].value.toLowerCase();
+            if (!CMDS[nestedCmdName]) {
+              markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${nestedCmdName}" is not a valid command. Expected one of: ${Object.keys(CMDS).join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + nestedTokens[0].value.length });
+            } else {
+              // Validate nested command's own params
+              const nestedSpec = CMDS[nestedCmdName];
+              const nestedParams = resolveParams(nestedSpec, nestedTokens);
+              const nestedArgs = nestedTokens.slice(1);
+              for (let j = 0; j < nestedArgs.length; j++) {
+                if (j >= nestedParams.length) {
+                  markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${nestedArgs[j].value}" for nested command "${nestedCmdName}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nestedArgs[j].value.length });
+                  continue;
+                }
+                const np = nestedParams[j];
+                const nv = nestedArgs[j].value;
+                if (np.type === 'number' && isNaN(Number(nv))) {
+                  markers.push({ severity: monaco.MarkerSeverity.Error, message: `Nested param "${np.name}" expects a number, got "${nv}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                } else if (np.type === 'enum' && !np.values.includes(nv)) {
+                  markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${nv}" is not valid for nested param "${np.name}". Expected one of: ${np.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                } else if (np.type === 'uid' && !isValidUID(nv)) {
+                  markers.push({ severity: monaco.MarkerSeverity.Error, message: `Nested param "${np.name}" expects a UID or %variable, got "${nv}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                }
+              }
+              if (nestedArgs.length < nestedParams.length) {
+                const missing = nestedParams.slice(nestedArgs.length).filter(p => p.default === undefined).map(p => p.name);
+                if (missing.length) {
+                  const eol = line.length + 1;
+                  markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Nested command missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: eol, endColumn: eol + 1 });
+                }
+              }
+            }
           }
         }
       }
