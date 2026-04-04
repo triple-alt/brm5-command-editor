@@ -175,7 +175,7 @@ require(['vs/editor/editor.main'], function () {
     }
   });
 
-  monaco.languages.registerHoverProvider(LANG, {
+monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const tokens = parseLine(line);
@@ -197,10 +197,8 @@ require(['vs/editor/editor.main'], function () {
       if (!param) return null;
       const contents = [{ value: `**${param.name}** — \`${param.type}\`` }];
       if (param.type === 'enum') contents.push({ value: `Valid values: ${param.values.join(', ')}` });
+      else if (param.type === 'uid') contents.push({ value: `Expected format: \`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\`` });
       return { contents };
-      const contents = [{ value: `**${param.name}** — \`${param.type}\`` }];
-      if (param.type === 'enum') contents.push({ value: `Valid values: ${param.values.join(', ')}` });
-      if (param.type === 'uid') contents.push({ value: `Expected format: \`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\`` });
     }
   });
 
@@ -243,13 +241,7 @@ require(['vs/editor/editor.main'], function () {
   }
 
   const initialValue = [
-    'create 1 Cube 0 0 0',
-    'tween 1 obj_001 2.5 10 0 5 0 90 0',
-    'color 1 obj_001 255 128 0',
-    'material 1 obj_001 Metal',
-    'explosion 5 100 0 0 0 GroundVehicle',
-    'trigger add 1 zone_01 onEnter',
-    'reset',
+    '// Start typing here...'
   ].join('\n');
 
   const editor = monaco.editor.create(document.getElementById('wrap'), {
