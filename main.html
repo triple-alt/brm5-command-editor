@@ -68,7 +68,20 @@ require(['vs/editor/editor.main'], function () {
     explosion: { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given type.' },
     move:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part' },
     size:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
-    trigger:   { params: [{name:'subtype',type:'enum',values:TRIGGER_SUB},{name:'world',type:'number',default:1},{name:'uID',type:'uid'},{name:'triggerName',type:'string'}], doc: 'Create, edit and add things to triggers.' }
+    trigger: { params: [{name:'subtype', type:'enum', values:TRIGGER_SUB}],
+    subtypes: {
+      add:        [{name:'world',type:'number'},{name:'uID',type:'uid'}],
+      remove:     [{name:'world',type:'number'},{name:'uID',type:'uid'}],
+      color:      [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}],
+      set:        [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}],
+      activate:   [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
+      reset:      [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
+      create:     [{name:'world',type:'number'},{name:'name',type:'string'}],
+      delete:     [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
+      executable: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'string'}],
+      whitelist:  [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'string'},{name:'boolean',type:'enum',values:['true','false']}],
+    }
+      , doc: 'Create, edit and add things to triggers.' }
   };
 
   monaco.languages.register({ id: LANG });
