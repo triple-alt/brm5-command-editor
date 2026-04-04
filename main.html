@@ -53,7 +53,7 @@ require(['vs/editor/editor.main'], function () {
 
   const LANG = 'cmdLang';
   const UUID_RE  = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const VAR_RE   = [/%[a-zA-Z_]\w*/, 'type'];
+  const VAR_RE = /^%[a-zA-Z_]\w*$/;
 
   function isValidUID(val) {
     return UUID_RE.test(val) || VAR_RE.test(val);
