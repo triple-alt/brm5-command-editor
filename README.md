@@ -1,1 +1,7 @@
 # brm5-command-editor
+
+Before you say anything, yes it is made with AI. More specifically Claude, however I have done a bit of bug fixes and adding stuff by hand (insane right?).
+
+A simple command editor with error checking for making stuff for BRM5 RGE.
+
+Supports commonly used commands, not all of them yet.
