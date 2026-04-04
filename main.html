@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CMD Editor</title>
+<title>Editor</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
@@ -42,7 +42,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     <div id="error-header">
       <span>problems</span>
       <span id="error-count">0 errors</span>
-    </div>
+      <span>made with claude</span>
     <div id="error-list"><div id="no-errors">no problems detected</div></div>
   </div>
 </div>
@@ -62,12 +62,12 @@ require(['vs/editor/editor.main'], function () {
     create:    { params: [{name:'world',type:'number'},{name:'type',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).' },
     tween:     { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.' },
     color:     { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0-255).' },
-    material:  { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to object pUID.' },
+    material:  { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.' },
     reset:     { params: [], doc: 'Reset the entire scene to its default state.' },
-    explosion: { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) affecting the given target type.' },
-    move:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Instantly move and rotate object pUID.' },
-    size:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize object pUID.' },
-    trigger:   { params: [{name:'subtype',type:'enum',values:TRIGGER_SUB},{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'extra',type:'string'}], doc: 'Manage a trigger zone. subtype controls the operation.' }
+    explosion: { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given type.' },
+    move:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part' },
+    size:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
+    trigger:   { params: [{name:'subtype',type:'enum',values:TRIGGER_SUB},{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'}, doc: 'Create, edit and add things to triggers.' }
   };
 
   monaco.languages.register({ id: LANG });
@@ -303,13 +303,7 @@ require(['vs/editor/editor.main'], function () {
   }
 
   const initialValue = [
-    'create 1 Cube 0 0 0',
-    'tween 1 f9759893-7a73-41a7-a593-4a048126efc9 2.5 10 0 5 0 90 0',
-    'color 1 f9759893-7a73-41a7-a593-4a048126efc9 255 128 0',
-    'material 1 f9759893-7a73-41a7-a593-4a048126efc9 metal_worn',
-    'explosion 5 100 0 0 0 GroundVehicle',
-    'trigger add 1 f9759893-7a73-41a7-a593-4a048126efc9 onEnter',
-    'reset',
+    '// Start typing here'
   ].join('\n');
 
   const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
