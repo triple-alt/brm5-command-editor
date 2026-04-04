@@ -42,7 +42,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     <div id="error-header">
       <span>problems</span>
       <span id="error-count">0 errors</span>
-      <span style="margin-left: auto; color: #444;">Made with Claude (sorry)</span>
+      <span style="margin-left: auto; color: #444;">made with claude</span>
     </div>
     <div id="error-list"><div id="no-errors">no problems detected</div></div>
   </div>
@@ -53,8 +53,8 @@ require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-edi
 require(['vs/editor/editor.main'], function () {
 
   const LANG = 'cmdLang';
-  const UUID_RE  = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const VAR_RE = /^%[a-zA-Z_]\w*$/;
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const VAR_RE  = /^%[a-zA-Z_]\w*$/;
 
   function isValidUID(val) {
     return UUID_RE.test(val) || VAR_RE.test(val);
@@ -87,7 +87,7 @@ require(['vs/editor/editor.main'], function () {
         reset:      [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
         create:     [{name:'world',type:'number'},{name:'name',type:'string'}],
         delete:     [{name:'world',type:'number'},{name:'triggerName',type:'string'}],
-        executable: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'string'}],
+        executable: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}],
         whitelist:  [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}],
       },
       doc: 'Create, edit and add things to triggers.'
@@ -101,7 +101,7 @@ require(['vs/editor/editor.main'], function () {
       root: [
         [/\b(create|tween|color|material|reset|explosion|move|size|trigger|wait)\b/, 'keyword'],
         [/\b(true|false)\b/, 'constant'],
-        [/%\S+/, 'type'],
+        [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
         [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
         [/-?\d+(\.\d+)?/, 'number'],
@@ -142,6 +142,22 @@ require(['vs/editor/editor.main'], function () {
     return Math.max(0, paramIdx);
   }
 
+  function paramLabel(p) {
+    if (p.type === 'enum')    return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|...' : ''}`;
+    if (p.type === 'uid')     return `${p.name}: uid`;
+    if (p.type === 'command') return `${p.name}: <command>`;
+    let label = `${p.name}: ${p.type}`;
+    if (p.default !== undefined) label += ` = ${p.default}`;
+    return label;
+  }
+
+  function paramDoc(p) {
+    if (p.type === 'enum')    return { value: `Valid values:\n${p.values.map(v => '- ' + v).join('\n')}` };
+    if (p.type === 'uid')     return { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` or `%variableName`' };
+    if (p.type === 'command') return { value: `A full command to execute on this line.\nValid commands: ${Object.keys(CMDS).join(', ')}` };
+    return { value: `Type: ${p.type}` };
+  }
+
   monaco.languages.registerSignatureHelpProvider(LANG, {
     signatureHelpTriggerCharacters: [' ', '\t'],
     signatureHelpRetriggerCharacters: [' '],
@@ -154,28 +170,14 @@ require(['vs/editor/editor.main'], function () {
       if (!spec) return null;
       const params = resolveParams(spec, tokens);
       if (!params.length) return null;
-      const cursorOffset = position.column;
-      const activeParam = getActiveParamIndex(tokens, cursorOffset);
-      const paramLabels = params.map(p => {
-        if (p.type === 'enum') return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|...' : ''}`;
-        if (p.type === 'uid') return `${p.name}: uid`;
-        let label = `${p.name}: ${p.type}`;
-        if (p.default !== undefined) label += ` = ${p.default}`;
-        return label;
-      });
+      const activeParam = getActiveParamIndex(tokens, position.column);
+      const paramLabels = params.map(paramLabel);
       return {
         value: {
           signatures: [{
             label: `${cmdName}  ${paramLabels.join('  ')}`,
             documentation: { value: spec.doc },
-            parameters: params.map((p, idx) => ({
-              label: paramLabels[idx],
-              documentation: p.type === 'enum'
-                ? { value: `Valid values:\n${p.values.map(v => '- ' + v).join('\n')}` }
-                : p.type === 'uid'
-                ? { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` or `%variableName`' }
-                : { value: `Type: ${p.type}` }
-            }))
+            parameters: params.map((p, idx) => ({ label: paramLabels[idx], documentation: paramDoc(p) }))
           }],
           activeSignature: 0,
           activeParameter: Math.min(activeParam, params.length - 1)
@@ -194,8 +196,11 @@ require(['vs/editor/editor.main'], function () {
       const wordInfo = model.getWordUntilPosition(position);
       const range = {
         startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
-        startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn
+        startColumn: wordInfo.startColumn || position.column,
+        endColumn: wordInfo.endColumn || position.column
       };
+
+      // No command typed yet — suggest commands
       if (!tokens.length || (tokens.length === 1 && !textBefore.endsWith(' '))) {
         return {
           suggestions: Object.entries(CMDS).map(([name, spec]) => ({
@@ -208,14 +213,38 @@ require(['vs/editor/editor.main'], function () {
           }))
         };
       }
+
       const cmdName = tokens[0].value.toLowerCase();
       const spec = CMDS[cmdName];
       if (!spec) return { suggestions: [] };
+
       const params = resolveParams(spec, tokens);
-      const paramIdx = tokens.length - 1;
+
+      // Figure out which param slot the cursor is in.
+      // If textBefore ends with a space the user has finished the last token
+      // and is starting a new slot — use tokens.length - 1 (0-based after cmd).
+      // If they are mid-word use tokens.length - 2.
+      const paramIdx = textBefore.endsWith(' ') ? tokens.length - 1 : tokens.length - 2;
+
       if (paramIdx < 0 || paramIdx >= params.length) return { suggestions: [] };
+
       const param = params[paramIdx];
+
+      // Suggest commands for the nested-command param
+      if (param.type === 'command') {
+        return {
+          suggestions: Object.keys(CMDS).map(name => ({
+            label: name,
+            kind: monaco.languages.CompletionItemKind.Function,
+            documentation: { value: CMDS[name].doc },
+            insertText: name,
+            range
+          }))
+        };
+      }
+
       if (param.type !== 'enum') return { suggestions: [] };
+
       return {
         suggestions: param.values.map(v => ({
           label: v,
@@ -248,10 +277,8 @@ require(['vs/editor/editor.main'], function () {
       if (tokIdx <= 0) return null;
       const param = params[tokIdx - 1];
       if (!param) return null;
-      const contents = [{ value: `**${param.name}** — \`${param.type}\`` + (param.default !== undefined ? ` (default: \`${param.default}\`)` : '') }];
-      if (param.type === 'enum') contents.push({ value: `Valid values: ${param.values.join(', ')}` });
-      else if (param.type === 'uid') contents.push({ value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` or `%variableName`' });
-      return { contents };
+      const header = `**${param.name}** — \`${param.type}\`` + (param.default !== undefined ? ` (default: \`${param.default}\`)` : '');
+      return { contents: [{ value: header }, paramDoc(param)] };
     }
   });
 
@@ -325,6 +352,11 @@ require(['vs/editor/editor.main'], function () {
           markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}". Expected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
         } else if (param.type === 'uid' && !isValidUID(val)) {
           markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID (e.g. f9759893-7a73-41a7-a593-4a048126efc9) or variable (e.g. %myVar), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'command') {
+          const nestedTokens = parseLine(val);
+          if (nestedTokens.length && !CMDS[nestedTokens[0].value.toLowerCase()]) {
+            markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not a valid command. Expected one of: ${Object.keys(CMDS).join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+          }
         }
       }
       if (args.length < params.length) {
