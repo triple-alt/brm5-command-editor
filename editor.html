@@ -9,8 +9,10 @@
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
 #editor-wrap { flex: 1; min-height: 0; }
-#bottom { display: flex; height: 160px; border-top: 1px solid #333; }
-#error-panel { flex: 1; background: #111; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+#error-panel {
+  height: 160px; background: #111; border-top: 1px solid #333;
+  display: flex; flex-direction: column; overflow: hidden;
+}
 #error-header {
   padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
   font-family: Consolas, monospace; font-size: 12px; color: #888;
@@ -31,51 +33,18 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .err-pos { color: #666; }
 .err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
-#tween-panel {
-  width: 260px; flex-shrink: 0; background: #0e0e0e;
-  border-left: 1px solid #333; display: flex; flex-direction: column; overflow: hidden;
-}
-#tween-header {
-  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
-  font-family: Consolas, monospace; font-size: 12px; color: #888;
-  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-}
-#tween-play {
-  background: none; border: 1px solid #444; color: #61afef;
-  font-family: Consolas, monospace; font-size: 11px; padding: 1px 8px;
-  cursor: pointer; border-radius: 3px;
-}
-#tween-play:hover { background: #1e2a3a; }
-#tween-canvas-wrap { flex: 1; position: relative; overflow: hidden; }
-canvas#tween-canvas { display: block; width: 100%; height: 100%; }
-#tween-label {
-  position: absolute; bottom: 6px; left: 0; right: 0; text-align: center;
-  font-family: Consolas, monospace; font-size: 11px; color: #444; pointer-events: none;
-}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="editor-wrap"></div>
-  <div id="bottom">
-    <div id="error-panel">
-      <div id="error-header">
-        <span>problems</span>
-        <span id="error-count">0 errors</span>
-        <span style="margin-left: auto; color: #444;">made with claude</span>
-      </div>
-      <div id="error-list"><div id="no-errors">no problems detected</div></div>
+  <div id="error-panel">
+    <div id="error-header">
+      <span>problems</span>
+      <span id="error-count">0 errors</span>
+      <span style="margin-left: auto; color: #444;">made with claude</span>
     </div>
-    <div id="tween-panel">
-      <div id="tween-header">
-        <span>tween preview</span>
-        <button id="tween-play">play</button>
-      </div>
-      <div id="tween-canvas-wrap">
-        <canvas id="tween-canvas"></canvas>
-        <div id="tween-label">no tween selected</div>
-      </div>
-    </div>
+    <div id="error-list"><div id="no-errors">no problems detected</div></div>
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
@@ -203,24 +172,6 @@ require(['vs/editor/editor.main'], function () {
     if (p.type === 'uid')     return { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` or `%variableName`' };
     if (p.type === 'command') return { value: `A full command to execute.\nValid commands: ${Object.keys(CMDS).join(', ')}` };
     return { value: `Type: ${p.type}` };
-  }
-
-  // Build a named-value map from a parsed line using resolveParams
-  // e.g. { world: 1, pUID: 'abc...', duration: 2.5, pX: 10, ... }
-  function extractNamedArgs(line) {
-    const tokens = parseLine(line);
-    if (!tokens.length) return null;
-    const spec = CMDS[tokens[0].value.toLowerCase()];
-    if (!spec) return null;
-    const params = resolveParams(spec, tokens);
-    const args = tokens.slice(1);
-    const result = { _cmd: tokens[0].value.toLowerCase() };
-    params.forEach((p, i) => {
-      const raw = args[i]?.value;
-      if (raw === undefined) return;
-      result[p.name] = p.type === 'number' ? parseFloat(raw) : raw;
-    });
-    return result;
   }
 
   function nestedCommandSuggestions(nestedText, cursorCol, range) {
@@ -509,153 +460,12 @@ require(['vs/editor/editor.main'], function () {
   let debounce;
   editor.onDidChangeModelContent(() => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => { validate(editor.getModel(), editor); updateTweenFromCursor(); }, 250);
+    debounce = setTimeout(() => validate(editor.getModel(), editor), 250);
   });
-  editor.onDidChangeCursorPosition(() => updateTweenFromCursor());
-  editor.onDidChangeCursorSelection(() => updateTweenFromCursor());
   validate(editor.getModel(), editor);
+
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
-
-  // ── Tween Visualizer ─────────────────────────────────────────────
-
-  const canvas = document.getElementById('tween-canvas');
-  const ctx = canvas.getContext('2d');
-  const label = document.getElementById('tween-label');
-  const playBtn = document.getElementById('tween-play');
-
-  let tweenData = null;
-  let animStart = null;
-  let animFrame = null;
-  let animating = false;
-
-  function resizeCanvas() {
-    const wrap = document.getElementById('tween-canvas-wrap');
-    canvas.width = wrap.clientWidth;
-    canvas.height = wrap.clientHeight;
-    drawTween(animating ? Math.min((Date.now() - animStart) / ((tweenData?.duration || 1) * 1000), 1) : 0);
-  }
-
-  function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
-
-  function drawTween(t) {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    if (!tweenData) { label.textContent = 'no tween selected'; return; }
-    label.textContent = '';
-    const e = easeInOut(t);
-    const cx = w / 2, cy = h / 2;
-    const scale = Math.min(w, h) * 0.28;
-    const maxCoord = Math.max(Math.abs(tweenData.pX || 0), Math.abs(tweenData.pY || 0), Math.abs(tweenData.pZ || 0), 1) * 1.6;
-    const startX = cx, startY = cy;
-    const endX = cx + ((tweenData.pZ || 0) / maxCoord) * scale;
-    const endY = cy - ((tweenData.pY || 0) / maxCoord) * scale;
-    const curX = startX + (endX - startX) * e;
-    const curY = startY + (endY - startY) * e;
-    const curRot = ((tweenData.rY || 0) * Math.PI / 180) * e;
-
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(endX, endY);
-    ctx.strokeStyle = '#2a3a4a';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    const gs = 10;
-    ctx.save(); ctx.translate(startX, startY);
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-    ctx.strokeRect(-gs, -gs, gs * 2, gs * 2);
-    ctx.restore();
-
-    ctx.save(); ctx.translate(endX, endY);
-    ctx.strokeStyle = '#2a4a3a'; ctx.lineWidth = 1;
-    ctx.strokeRect(-gs, -gs, gs * 2, gs * 2);
-    ctx.restore();
-
-    const boxSize = 18;
-    ctx.save(); ctx.translate(curX, curY); ctx.rotate(curRot);
-    ctx.fillStyle = '#1a3a5a'; ctx.strokeStyle = '#61afef'; ctx.lineWidth = 1.5;
-    ctx.fillRect(-boxSize/2, -boxSize/2, boxSize, boxSize);
-    ctx.strokeRect(-boxSize/2, -boxSize/2, boxSize, boxSize);
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -boxSize/2 - 4);
-    ctx.strokeStyle = '#61afef'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.restore();
-
-    const barY = h - 14, barX = 12, barW = w - 24;
-    ctx.fillStyle = '#1e1e1e'; ctx.fillRect(barX, barY, barW, 4);
-    ctx.fillStyle = '#378add'; ctx.fillRect(barX, barY, barW * e, 4);
-
-    const elapsed = (tweenData.duration * t).toFixed(1);
-    ctx.fillStyle = '#555'; ctx.font = '10px Consolas, monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${elapsed}s / ${tweenData.duration}s`, w - 12, barY - 3);
-    ctx.textAlign = 'left';
-    const lx = ((tweenData.pX || 0) * e).toFixed(1);
-    const ly = ((tweenData.pY || 0) * e).toFixed(1);
-    const lz = ((tweenData.pZ || 0) * e).toFixed(1);
-    ctx.fillStyle = '#444'; ctx.font = '10px Consolas, monospace';
-    ctx.fillText(`x:${lx} y:${ly} z:${lz}`, 12, 14);
-  }
-
-  function animateTween() {
-    if (!animating || !tweenData) return;
-    const t = Math.min((Date.now() - animStart) / (tweenData.duration * 1000), 1);
-    drawTween(t);
-    if (t < 1) animFrame = requestAnimationFrame(animateTween);
-    else { animating = false; playBtn.textContent = 'play'; }
-  }
-
-  function startAnimation() {
-    if (!tweenData) return;
-    cancelAnimationFrame(animFrame);
-    animating = true; animStart = Date.now();
-    playBtn.textContent = 'stop';
-    animateTween();
-  }
-
-  function stopAnimation() {
-    cancelAnimationFrame(animFrame);
-    animating = false; playBtn.textContent = 'play';
-    drawTween(0);
-  }
-
-  playBtn.addEventListener('click', () => { if (animating) stopAnimation(); else startAnimation(); });
-
-  // Parse a tween from a line using extractNamedArgs so it respects the
-  // actual param definitions rather than hardcoded token indices.
-  function parseTweenLine(line) {
-    const named = extractNamedArgs(line);
-    if (!named || named._cmd !== 'tween') return null;
-    const duration = named.duration;
-    if (isNaN(duration) || duration <= 0) return null;
-    return {
-      duration,
-      pX: isNaN(named.pX) ? 0 : named.pX,
-      pY: isNaN(named.pY) ? 0 : named.pY,
-      pZ: isNaN(named.pZ) ? 0 : named.pZ,
-      rX: isNaN(named.rX) ? 0 : named.rX,
-      rY: isNaN(named.rY) ? 0 : named.rY,
-      rZ: isNaN(named.rZ) ? 0 : named.rZ,
-    };
-  }
-
-  function updateTweenFromCursor() {
-    const model = editor.getModel();
-    const sel = editor.getSelection();
-    // Use selection start line if something is selected, else cursor line
-    const ln = (sel && !sel.isEmpty()) ? sel.startLineNumber : editor.getPosition().lineNumber;
-    const line = model.getLineContent(ln);
-    const parsed = parseTweenLine(line);
-    const changed = JSON.stringify(parsed) !== JSON.stringify(tweenData);
-    tweenData = parsed;
-    if (changed) { stopAnimation(); drawTween(0); }
-  }
-
-  new ResizeObserver(resizeCanvas).observe(document.getElementById('tween-canvas-wrap'));
-  resizeCanvas();
-  updateTweenFromCursor();
 });
 </script>
 </body>
