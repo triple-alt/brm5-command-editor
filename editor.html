@@ -96,7 +96,7 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
       root: [
-        [/\b(create|tween|color|material|reset|explosion|move|size|trigger|wait)\b/, 'keyword'],
+        [/\b(create|tween|duplicate|color|material|reset|explosion|move|size|trigger|wait)\b/, 'keyword'],
         [/\b(true|false)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
