@@ -9,8 +9,10 @@
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
 #editor-wrap { flex: 1; min-height: 0; }
-#bottom { display: flex; height: 200px; border-top: 1px solid #333; }
-#error-panel { flex: 1; background: #111; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+#error-panel {
+  height: 160px; background: #111; border-top: 1px solid #333;
+  display: flex; flex-direction: column; overflow: hidden;
+}
 #error-header {
   padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
   font-family: Consolas, monospace; font-size: 12px; color: #888;
@@ -37,53 +39,22 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .err-pos { color: #666; }
 .err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
-#tween-panel {
-  width: 280px; flex-shrink: 0; background: #0e0e0e;
-  border-left: 1px solid #333; display: flex; flex-direction: column;
-}
-#tween-header {
-  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
-  font-family: Consolas, monospace; font-size: 12px; color: #888;
-  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-}
-#tween-controls { display: flex; gap: 4px; }
-#tween-canvas-wrap { flex: 1; position: relative; overflow: hidden; }
-canvas#tween-canvas { display: block; width: 100%; height: 100%; }
-#tween-status {
-  position: absolute; bottom: 6px; left: 0; right: 0; text-align: center;
-  font-family: Consolas, monospace; font-size: 11px; color: #444; pointer-events: none;
-}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="editor-wrap"></div>
-  <div id="bottom">
-    <div id="error-panel">
-      <div id="error-header">
-        <span>errors</span>
-        <span id="error-count">0 errors</span>
-        <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
-          <button class="hdr-btn" id="btn-import">Import</button>
-          <button class="hdr-btn" id="btn-export">Export</button>
-          <span style="color: #666;">made with claude</span>
-        </span>
-      </div>
-      <div id="error-list"><div id="no-errors">no errors</div></div>
+  <div id="error-panel">
+    <div id="error-header">
+      <span>errors</span>
+      <span id="error-count">0 errors</span>
+      <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+        <button class="hdr-btn" id="btn-import">Import</button>
+        <button class="hdr-btn" id="btn-export">Export</button>
+        <span style="color: #666;">made with claude</span>
+      </span>
     </div>
-    <div id="tween-panel">
-      <div id="tween-header">
-        <span>tween preview</span>
-        <div id="tween-controls">
-          <button class="hdr-btn" id="btn-play">play</button>
-          <button class="hdr-btn" id="btn-stop">stop</button>
-        </div>
-      </div>
-      <div id="tween-canvas-wrap">
-        <canvas id="tween-canvas"></canvas>
-        <div id="tween-status">no tweens found</div>
-      </div>
-    </div>
+    <div id="error-list"><div id="no-errors">no errors</div></div>
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
@@ -186,17 +157,15 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    // Normalise: replace tabs with spaces, collapse multiple spaces
-    const normalised = line.replace(/\t/g, ' ').replace(/ +/g, ' ').trimStart();
-    const leadingSpaces = line.length - line.trimStart().length;
+    const trimmed = line.trimStart();
+    const leadingSpaces = line.length - trimmed.length;
     const tokens = [];
     let i = 0;
-    while (i < normalised.length) {
-      if (normalised[i] === ' ') { i++; continue; }
+    while (i < trimmed.length) {
+      if (trimmed[i] === ' ') { i++; continue; }
       const start = i;
-      while (i < normalised.length && normalised[i] !== ' ') i++;
-      // col is approximate after normalisation — use token index for param mapping
-      tokens.push({ value: normalised.slice(start, i), col: leadingSpaces + start + 1 });
+      while (i < trimmed.length && trimmed[i] !== ' ') i++;
+      tokens.push({ value: trimmed.slice(start, i), col: leadingSpaces + start + 1 });
     }
     return tokens;
   }
@@ -227,23 +196,6 @@ require(['vs/editor/editor.main'], function () {
     const sub = subtypeVal && spec.subtypes[subtypeVal];
     const extra = sub ? (sub.params ?? sub) : [];
     return [...spec.params, ...extra];
-  }
-
-  function extractNamedArgs(line) {
-    const tokens = parseLine(line);
-    if (!tokens.length) return null;
-    const cmdName = tokens[0].value.toLowerCase();
-    const spec = CMDS[cmdName];
-    if (!spec) return null;
-    const params = resolveParams(spec, tokens);
-    const args = tokens.slice(1);
-    const result = { _cmd: cmdName };
-    params.forEach((p, i) => {
-      const raw = args[i]?.value;
-      if (raw === undefined) return;
-      result[p.name] = p.type === 'number' ? parseFloat(raw) : raw;
-    });
-    return result;
   }
 
   function getActiveParamIndex(tokens, cursorCol) {
@@ -558,10 +510,7 @@ require(['vs/editor/editor.main'], function () {
   let debounce;
   editor.onDidChangeModelContent(() => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => {
-      validate(editor.getModel(), editor);
-      rebuildTweens();
-    }, 250);
+    debounce = setTimeout(() => validate(editor.getModel(), editor), 250);
   });
   validate(editor.getModel(), editor);
 
@@ -595,284 +544,6 @@ require(['vs/editor/editor.main'], function () {
     });
     input.click();
   });
-
-  // ── Tween Preview ────────────────────────────────────────────────
-  // Approach: build a flat timeline of keyframes per UID up front.
-  // Each UID gets an array of { t, x, y } keyframes in absolute time.
-  // Sampling at any elapsed time is then trivial — no per-frame logic needed.
-
-  const canvas = document.getElementById('tween-canvas');
-  const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('tween-status');
-
-  let timeline = {};     // uid -> [{ t, x, y }, ...]  sorted by t
-  let totalDur  = 0;
-  let elapsed   = 0;     // current playhead position in seconds
-  let animFrame = null;
-  let animating = false;
-  let lastTick  = null;  // Date.now() of last rAF tick, for delta-time pause/resume
-
-  const uidColors = {};
-  const palette = ['#61afef','#e5c07b','#98c379','#e06c75','#c678dd','#56b6c2','#d19a66'];
-  let colorIdx = 0;
-  function colorFor(uid) {
-    if (!uidColors[uid]) uidColors[uid] = palette[colorIdx++ % palette.length];
-    return uidColors[uid];
-  }
-
-  function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
-
-  // Build timeline from editor content.
-  // Walks lines in order. Maintains a global clock that advances by
-  // tween duration OR wait duration. Tweens add two keyframes per uid:
-  // one at segStart (from position) and one at segEnd (to position).
-  // Waits just advance the clock — no keyframes added.
-  function buildTimeline() {
-    const model = editor.getModel();
-    let clock = 0;
-    const kf = {};      // uid -> keyframes array { t, x, y }
-    const lastPos = {}; // uid -> { x, y } last committed position
-
-    for (let ln = 1; ln <= model.getLineCount(); ln++) {
-      const named = extractNamedArgs(model.getLineContent(ln));
-      if (!named) continue;
-
-      if (named._cmd === 'wait') {
-        const dur = named.duration;
-        if (!isNaN(dur) && dur > 0) clock += dur;
-
-      } else if (named._cmd === 'tween') {
-        const uid = named.pUID;
-        const dur = named.duration;
-        const toX = isNaN(named.pX) ? 0 : named.pX;
-        const toY = isNaN(named.pZ) ? 0 : named.pZ;
-        if (!uid || isNaN(dur) || dur <= 0) continue;
-
-        if (!kf[uid]) kf[uid] = [];
-
-        const segStart = clock;
-        const segEnd   = clock + dur;
-        const fromPos  = lastPos[uid];
-
-        if (fromPos) {
-          // Insert a "hold" keyframe at segStart using last known position,
-          // but only if there isn't already a keyframe at this exact time.
-          const last = kf[uid][kf[uid].length - 1];
-          if (!last || last.t < segStart) {
-            kf[uid].push({ t: segStart, x: fromPos.x, y: fromPos.y });
-          }
-        } else {
-          // First tween for this uid — seed at t=0 at the destination
-          // (no prior position known) so the object exists from the start.
-          kf[uid].push({ t: 0, x: toX, y: toY });
-        }
-
-        // Destination keyframe at end of tween
-        kf[uid].push({ t: segEnd, x: toX, y: toY });
-
-        lastPos[uid] = { x: toX, y: toY };
-        clock = segEnd;
-      }
-    }
-
-    return { kf, totalDur: clock };
-  }
-
-  // Sample a uid's position at time t using its keyframes
-  function samplePos(kfs, t) {
-    if (!kfs || kfs.length === 0) return null;
-    if (t <= kfs[0].t) return { x: kfs[0].x, y: kfs[0].y };
-    if (t >= kfs[kfs.length - 1].t) {
-      const last = kfs[kfs.length - 1];
-      return { x: last.x, y: last.y };
-    }
-    // Find the segment containing t
-    for (let i = 0; i < kfs.length - 1; i++) {
-      const a = kfs[i], b = kfs[i + 1];
-      if (t >= a.t && t <= b.t) {
-        const frac = easeInOut((t - a.t) / (b.t - a.t));
-        return { x: a.x + (b.x - a.x) * frac, y: a.y + (b.y - a.y) * frac };
-      }
-    }
-    return null;
-  }
-
-  function getBounds(kf) {
-    const all = Object.values(kf).flat();
-    if (!all.length) return { minX: -5, maxX: 5, minY: -5, maxY: 5 };
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    all.forEach(k => {
-      minX = Math.min(minX, k.x); maxX = Math.max(maxX, k.x);
-      minY = Math.min(minY, k.y); maxY = Math.max(maxY, k.y);
-    });
-    if (maxX - minX < 2) { minX -= 1; maxX += 1; }
-    if (maxY - minY < 2) { minY -= 1; maxY += 1; }
-    return { minX, maxX, minY, maxY };
-  }
-
-  function worldToCanvas(wx, wy, bounds, w, h) {
-    const pad = 20;
-    const rangeX = bounds.maxX - bounds.minX;
-    const rangeY = bounds.maxY - bounds.minY;
-    const scale = Math.min((w - pad*2) / rangeX, (h - pad*2) / rangeY);
-    const cx = w/2 + (wx - (bounds.minX + bounds.maxX)/2) * scale;
-    const cy = h/2 - (wy - (bounds.minY + bounds.maxY)/2) * scale;
-    return { x: cx, y: cy };
-  }
-
-  function drawAxisLabels(w, h) {
-    ctx.fillStyle = '#333';
-    ctx.font = '10px Consolas, monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('X →', w - 26, h - 6);
-    ctx.fillText('Z ↑', 4, 12);
-  }
-
-  function drawFrame(t) {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    const uids = Object.keys(timeline);
-    if (!uids.length) { statusEl.textContent = 'no tweens found'; return; }
-    statusEl.textContent = '';
-
-    const bounds = getBounds(timeline);
-
-    // Draw paths (faint dashed lines between consecutive keyframes per uid)
-    uids.forEach(uid => {
-      const kfs = timeline[uid];
-      const col = colorFor(uid);
-      for (let i = 0; i < kfs.length - 1; i++) {
-        const a = worldToCanvas(kfs[i].x,   kfs[i].y,   bounds, w, h);
-        const b = worldToCanvas(kfs[i+1].x, kfs[i+1].y, bounds, w, h);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = col + '33';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // arrow
-        const angle = Math.atan2(b.y - a.y, b.x - a.x);
-        ctx.beginPath();
-        ctx.moveTo(b.x, b.y);
-        ctx.lineTo(b.x - 7*Math.cos(angle-0.4), b.y - 7*Math.sin(angle-0.4));
-        ctx.lineTo(b.x - 7*Math.cos(angle+0.4), b.y - 7*Math.sin(angle+0.4));
-        ctx.closePath();
-        ctx.fillStyle = col + '44';
-        ctx.fill();
-      }
-      // destination dots
-      kfs.forEach(k => {
-        const p = worldToCanvas(k.x, k.y, bounds, w, h);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
-        ctx.fillStyle = col + '88';
-        ctx.fill();
-      });
-    });
-
-    // Draw objects at current time t
-    uids.forEach(uid => {
-      const pos = samplePos(timeline[uid], t);
-      if (!pos) return;
-      const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
-      const col = colorFor(uid);
-      const bs = 12;
-      ctx.fillStyle = col + '44';
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(p.x - bs/2, p.y - bs/2, bs, bs);
-      ctx.strokeRect(p.x - bs/2, p.y - bs/2, bs, bs);
-    });
-
-    // Progress bar
-    const barX = 12, barY = h - 10, barW = w - 24;
-    ctx.fillStyle = '#1e1e1e';
-    ctx.fillRect(barX, barY, barW, 3);
-    if (totalDur > 0) {
-      ctx.fillStyle = '#378add';
-      ctx.fillRect(barX, barY, barW * Math.min(t / totalDur, 1), 3);
-      ctx.fillStyle = '#555';
-      ctx.font = '10px Consolas, monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${t.toFixed(1)}s / ${totalDur.toFixed(1)}s`, w - 12, barY - 3);
-    }
-
-    drawAxisLabels(w, h);
-  }
-
-  function animLoop() {
-    if (!animating) return;
-    const now = Date.now();
-    const delta = (now - lastTick) / 1000;
-    lastTick = now;
-    elapsed = Math.min(elapsed + delta, totalDur);
-    drawFrame(elapsed);
-    if (elapsed < totalDur) {
-      animFrame = requestAnimationFrame(animLoop);
-    } else {
-      animating = false;
-      document.getElementById('btn-play').textContent = 'play';
-    }
-  }
-
-  function startAnim() {
-    if (!Object.keys(timeline).length) return;
-    cancelAnimationFrame(animFrame);
-    animating = true;
-    lastTick = Date.now();
-    document.getElementById('btn-play').textContent = 'pause';
-    animLoop();
-  }
-
-  function pauseAnim() {
-    cancelAnimationFrame(animFrame);
-    animating = false;
-    document.getElementById('btn-play').textContent = 'play';
-  }
-
-  function stopAnim() {
-    cancelAnimationFrame(animFrame);
-    animating = false;
-    elapsed = 0;
-    document.getElementById('btn-play').textContent = 'play';
-    drawFrame(0);
-  }
-
-  function rebuildTweens() {
-    const wasAnimating = animating;
-    pauseAnim();
-    const built = buildTimeline();
-    timeline = built.kf;
-    totalDur = built.totalDur;
-    // reset playhead only if content changed enough to invalidate it
-    if (elapsed > totalDur) elapsed = 0;
-    drawFrame(elapsed);
-    if (wasAnimating && Object.keys(timeline).length) startAnim();
-  }
-
-  document.getElementById('btn-play').addEventListener('click', () => {
-    if (animating) pauseAnim();
-    else {
-      if (elapsed >= totalDur) elapsed = 0; // restart from beginning if finished
-      startAnim();
-    }
-  });
-  document.getElementById('btn-stop').addEventListener('click', stopAnim);
-
-  function resizeCanvas() {
-    const wrap = document.getElementById('tween-canvas-wrap');
-    canvas.width = wrap.clientWidth;
-    canvas.height = wrap.clientHeight;
-    drawFrame(elapsed);
-  }
-
-  new ResizeObserver(resizeCanvas).observe(document.getElementById('tween-canvas-wrap'));
-  resizeCanvas();
-  rebuildTweens();
-
 });
 </script>
 </body>
