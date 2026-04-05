@@ -774,29 +774,36 @@ require(['vs/editor/editor.main'], function () {
 
     const totalDur = tweenSequence.reduce((a, s) => a + s.duration, 0);
 
-    // Walk through sequence to find each uid's current position
+    // Walk through sequence to find each uid's current position.
+    // We walk the full sequence in order. For each segment we only
+    // update currentPos when elapsed has actually reached that segment —
+    // this ensures waits hold the previous position and don't pre-advance.
     const currentPos = {};
     let t = 0;
     tweenSequence.forEach(s => {
       const segStart = t;
       const segEnd = t + s.duration;
-      if (!s._wait) {
-        if (elapsed >= segEnd) {
-          // finished this segment
-          currentPos[s.uid] = { x: s.toX, y: s.toY };
-        } else if (elapsed >= segStart) {
-          // currently in this segment
-          const frac = easeInOut((elapsed - segStart) / s.duration);
-          currentPos[s.uid] = {
-            x: s.fromX + (s.toX - s.fromX) * frac,
-            y: s.fromY + (s.toY - s.fromY) * frac,
-          };
-        } else if (!currentPos[s.uid]) {
-          // hasn't started yet — show at first known position (toX/toY if _noFrom, else fromX/fromY)
+      t = segEnd;
+      if (s._wait) return; // wait just advances t, positions stay frozen
+      if (elapsed < segStart) {
+        // This segment hasn't started yet. Seed position from fromX/fromY
+        // so the object appears at its correct pre-tween location.
+        if (!currentPos[s.uid]) {
           currentPos[s.uid] = s._noFrom ? { x: s.toX, y: s.toY } : { x: s.fromX, y: s.fromY };
         }
+        return;
       }
-      t = segEnd;
+      if (elapsed >= segEnd) {
+        // Segment fully complete — snap to destination.
+        currentPos[s.uid] = { x: s.toX, y: s.toY };
+      } else {
+        // Currently animating this segment.
+        const frac = easeInOut((elapsed - segStart) / s.duration);
+        currentPos[s.uid] = {
+          x: s.fromX + (s.toX - s.fromX) * frac,
+          y: s.fromY + (s.toY - s.fromY) * frac,
+        };
+      }
     });
 
     // Draw each object as a coloured box
