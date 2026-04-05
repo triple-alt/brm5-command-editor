@@ -617,10 +617,15 @@ require(['vs/editor/editor.main'], function () {
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
       const named = extractNamedArgs(line);
-      if (!named || named._cmd !== 'tween') continue;
-      const { pUID, duration, pX, pY, pZ } = named;
-      if (!pUID || isNaN(duration) || duration <= 0) continue;
-      steps.push({ uid: pUID, duration, toX: isNaN(pX) ? 0 : pX, toY: isNaN(pY) ? 0 : pY });
+      if (!named) continue;
+      if (named._cmd === 'wait') {
+        const dur = named.duration;
+        if (!isNaN(dur) && dur > 0) steps.push({ _wait: true, duration: dur });
+      } else if (named._cmd === 'tween') {
+        const { pUID, duration, pX, pZ } = named;
+        if (!pUID || isNaN(duration) || duration <= 0) continue;
+        steps.push({ uid: pUID, duration, toX: isNaN(pX) ? 0 : pX, toY: isNaN(pZ) ? 0 : pZ });
+      }
     }
     return steps;
   }
@@ -655,9 +660,10 @@ require(['vs/editor/editor.main'], function () {
   }
 
   function getBounds(seq) {
-    if (!seq.length) return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
-    const xs = seq.flatMap(s => [s.fromX, s.toX]);
-    const ys = seq.flatMap(s => [s.fromY, s.toY]);
+    const real = seq.filter(s => !s._wait);
+    if (!real.length) return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    const xs = real.flatMap(s => [s.fromX, s.toX]);
+    const ys = real.flatMap(s => [s.fromY, s.toY]);
     let minX = Math.min(...xs), maxX = Math.max(...xs);
     let minY = Math.min(...ys), maxY = Math.max(...ys);
     // ensure some range so single-point doesn't collapse
@@ -689,6 +695,7 @@ require(['vs/editor/editor.main'], function () {
 
     // Draw path lines and waypoints
     tweenSequence.forEach(s => {
+      if (s._wait) return;
       const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
       const to   = worldToCanvas(s.toX,   s.toY,   bounds, w, h);
       const col  = colorFor(s.uid);
