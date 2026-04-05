@@ -8,9 +8,40 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
-#editor-wrap { flex: 1; min-height: 0; }
+#main-row { display: flex; flex: 1; min-height: 0; }
+#editor-wrap { flex: 1; min-width: 0; }
+#preview-panel {
+  width: 320px; min-width: 200px; max-width: 600px;
+  background: #111; border-left: 1px solid #333;
+  display: flex; flex-direction: column; overflow: hidden; position: relative; flex-shrink: 0;
+}
+#preview-resize {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+  cursor: col-resize; z-index: 10; background: transparent;
+}
+#preview-resize:hover, #preview-resize.dragging { background: #444; }
+#preview-header {
+  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
+  font-family: Consolas, monospace; font-size: 12px; color: #888;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0; user-select: none;
+}
+#preview-canvas-wrap { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+#preview-canvas { display: block; }
+#preview-controls {
+  padding: 6px 10px; background: #1a1a1a; border-top: 1px solid #333;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+#preview-controls button {
+  background: none; border: 1px solid #444; color: #888;
+  font-family: Consolas, monospace; font-size: 11px; padding: 2px 10px;
+  cursor: pointer; border-radius: 3px;
+}
+#preview-controls button:hover { background: #2a2a2a; color: #abb2bf; border-color: #555; }
+#preview-controls button.active { background: #2a4a2a; color: #7ec07e; border-color: #5a8a5a; }
+#preview-time { font-family: Consolas, monospace; font-size: 11px; color: #666; margin-left: auto; white-space: nowrap; }
+#preview-scrubber { flex: 1; min-width: 40px; accent-color: #61afef; }
 #error-panel {
-  height: 160px; background: #111; border-top: 1px solid #333;
+  height: 140px; background: #111; border-top: 1px solid #333;
   display: flex; flex-direction: column; overflow: hidden;
 }
 #error-header {
@@ -43,7 +74,26 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 </head>
 <body>
 <div id="app">
-  <div id="editor-wrap"></div>
+  <div id="main-row">
+    <div id="editor-wrap"></div>
+    <div id="preview-panel">
+      <div id="preview-resize"></div>
+      <div id="preview-header">
+        <span>2d preview</span>
+        <span style="color:#61afef;margin-left:4px;font-size:11px;">z / x plane</span>
+        <span style="margin-left:auto;color:#444;font-size:11px;">drag edge to resize</span>
+      </div>
+      <div id="preview-canvas-wrap">
+        <canvas id="preview-canvas"></canvas>
+      </div>
+      <div id="preview-controls">
+        <button id="btn-play" class="active">pause</button>
+        <button id="btn-reset-anim">reset</button>
+        <input type="range" id="preview-scrubber" min="0" max="10" value="0" step="0.01">
+        <span id="preview-time">0.0s</span>
+      </div>
+    </div>
+  </div>
   <div id="error-panel">
     <div id="error-header">
       <span>errors</span>
@@ -495,7 +545,15 @@ require(['vs/editor/editor.main'], function () {
     updateErrorPanel(markers, editorRef);
   }
 
-  const initialValue = 'create 1 part 1 1 1';
+  const initialValue = [
+    'create 1 part 0 0 0',
+    'create 1 part 10 0 0',
+    'tween 1 %obj1 2 10 0 10 0 0 0',
+    'wait 1',
+    'tween 1 %obj1 1.5 0 0 0 0 0 0',
+    'tween 1 %obj2 3 0 0 15 0 0 0',
+  ].join('\n');
+
   const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
     value: initialValue, language: LANG, theme: 'vs-dark', fontSize: 14,
     fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
@@ -510,7 +568,10 @@ require(['vs/editor/editor.main'], function () {
   let debounce;
   editor.onDidChangeModelContent(() => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => validate(editor.getModel(), editor), 250);
+    debounce = setTimeout(() => {
+      validate(editor.getModel(), editor);
+      rebuildTimeline();
+    }, 300);
   });
   validate(editor.getModel(), editor);
 
@@ -539,11 +600,507 @@ require(['vs/editor/editor.main'], function () {
         editor.setValue(e.target.result);
         editor.setPosition({ lineNumber: 1, column: 1 });
         editor.focus();
+        rebuildTimeline();
       };
       reader.readAsText(file);
     });
     input.click();
   });
+
+  // ─── 2D PREVIEW ──────────────────────────────────────────────────────────────
+
+  const canvas = document.getElementById('preview-canvas');
+  const ctx = canvas.getContext('2d');
+
+  const OBJ_COLORS = ['#61afef','#e06c75','#98c379','#e5c07b','#c678dd','#56b6c2','#d19a66','#ff8c69'];
+
+  // Per-uid stable color assignment
+  const uidColorMap = {};
+  let uidColorIdx = 0;
+  function colorForUid(uid) {
+    if (!uidColorMap[uid]) {
+      uidColorMap[uid] = OBJ_COLORS[uidColorIdx++ % OBJ_COLORS.length];
+    }
+    return uidColorMap[uid];
+  }
+
+  // State
+  let animTime = 0;
+  let playing = true;
+  let animStartTs = null;
+  let totalDur = 1;
+  let objTimelines = {}; // uid -> [{t, x, z}]
+  let waitEvents = [];   // [{t, duration}]
+  let parsedEvents = [];
+
+  // Parse script into a flat ordered list of events with absolute timestamps
+  function parseScript(text) {
+    const lines = text.split('\n');
+    const events = [];
+    let cursor = 0;
+
+    for (const raw of lines) {
+      const tokens = parseLine(raw);
+      if (!tokens.length) continue;
+      const cmd = tokens[0].value.toLowerCase();
+      const args = tokens.slice(1).map(t => t.value);
+
+      if (cmd === 'wait') {
+        const dur = parseFloat(args[0]);
+        if (!isNaN(dur) && dur > 0) {
+          events.push({ type: 'wait', t: cursor, duration: dur });
+          cursor += dur;
+        }
+      } else if (cmd === 'create') {
+        // world type pX pY pZ
+        const pX = parseFloat(args[2]);
+        const pZ = parseFloat(args[4]);
+        if (!isNaN(pX) && !isNaN(pZ)) {
+          const uid = `__create_${events.length}`;
+          events.push({ type: 'create', t: cursor, uid, x: pX, z: pZ });
+        }
+      } else if (cmd === 'tween') {
+        // world uid duration pX pY pZ rX rY rZ
+        const uid = args[1];
+        const dur = parseFloat(args[2]);
+        const toX = parseFloat(args[3]);
+        const toZ = parseFloat(args[5]);
+        if (uid && !isNaN(dur) && dur > 0 && !isNaN(toX) && !isNaN(toZ)) {
+          events.push({ type: 'tween', t: cursor, uid, duration: dur, toX, toZ });
+          cursor += dur;
+        }
+      } else if (cmd === 'move') {
+        // world uid pX pY pZ rX rY rZ  — instant
+        const uid = args[1];
+        const toX = parseFloat(args[2]);
+        const toZ = parseFloat(args[4]);
+        if (uid && !isNaN(toX) && !isNaN(toZ)) {
+          events.push({ type: 'move', t: cursor, uid, toX, toZ });
+        }
+      }
+    }
+
+    return { events, totalDuration: Math.max(cursor, 0.001) };
+  }
+
+  // Build per-object position keyframe arrays from parsed events
+  function buildObjectTimelines(events) {
+    const objTl = {};
+
+    // Seed from creates
+    for (const ev of events) {
+      if (ev.type === 'create') {
+        objTl[ev.uid] = [{ t: ev.t, x: ev.x, z: ev.z }];
+      }
+    }
+
+    // Seed unknown uids from their FIRST appearance — tween implies the object
+    // starts at the tween's destination (we work backwards for the first one),
+    // but actually: the first tween's "from" is unknown, so we mark it as a
+    // dangling start. We do a two-pass approach:
+    // Pass 1: collect first-seen time per uid so we can seed correctly.
+    const firstSeen = {}; // uid -> { t, fromTween: true/false }
+    for (const ev of events) {
+      if ((ev.type === 'tween' || ev.type === 'move') && firstSeen[ev.uid] === undefined) {
+        firstSeen[ev.uid] = ev.t;
+      }
+    }
+    // Seed: for uids not from a 'create', place a placeholder ONLY at their
+    // first-referenced time. We don't know the real start position so we defer
+    // — the first tween itself will supply the start keyframe below.
+    for (const [uid, t] of Object.entries(firstSeen)) {
+      if (!objTl[uid]) {
+        // No create found — we'll let the tween loop insert its own start kf.
+        objTl[uid] = [];
+      }
+    }
+
+    // Apply tweens and moves in order
+    for (const ev of events) {
+      if (ev.type === 'tween') {
+        const tl = objTl[ev.uid];
+        if (!tl) continue;
+        // Determine from-position: use last known keyframe if one exists before ev.t,
+        // otherwise the tween start is unknown — omit a synthetic start keyframe so
+        // the path begins cleanly at the tween's first point.
+        const hasEarlierKf = tl.some(k => k.t <= ev.t);
+        if (hasEarlierKf) {
+          const fromPos = getPosAt(tl, ev.t);
+          if (!tl.find(k => k.t === ev.t)) {
+            tl.push({ t: ev.t, x: fromPos.x, z: fromPos.z });
+          }
+        } else {
+          // First tween for this uid — start keyframe IS the tween's start time,
+          // but we don't know the from-position. Leave no synthetic origin; just
+          // add the destination. The path will start at the first known point.
+          // (We add a start kf only if there's a preceding create or move.)
+        }
+        // Destination keyframe
+        tl.push({ t: ev.t + ev.duration, x: ev.toX, z: ev.toZ });
+        tl.sort((a, b) => a.t - b.t);
+      } else if (ev.type === 'move') {
+        const tl = objTl[ev.uid];
+        if (!tl) continue;
+        tl.push({ t: ev.t, x: ev.toX, z: ev.toZ });
+        tl.sort((a, b) => a.t - b.t);
+      }
+    }
+
+    return objTl;
+  }
+
+  // Interpolate position from a keyframe array at time t
+  function getPosAt(tl, t) {
+    if (!tl || !tl.length) return { x: 0, z: 0 };
+    if (t <= tl[0].t) return { x: tl[0].x, z: tl[0].z };
+    const last = tl[tl.length - 1];
+    if (t >= last.t) return { x: last.x, z: last.z };
+    for (let i = 0; i < tl.length - 1; i++) {
+      if (t >= tl[i].t && t <= tl[i + 1].t) {
+        const span = tl[i + 1].t - tl[i].t;
+        const frac = span === 0 ? 1 : (t - tl[i].t) / span;
+        return {
+          x: tl[i].x + (tl[i + 1].x - tl[i].x) * frac,
+          z: tl[i].z + (tl[i + 1].z - tl[i].z) * frac,
+        };
+      }
+    }
+    return { x: last.x, z: last.z };
+  }
+
+  function rebuildTimeline() {
+    const text = editor.getValue();
+    const parsed = parseScript(text);
+    parsedEvents = parsed.events;
+    totalDur = parsed.totalDuration;
+    waitEvents = parsedEvents.filter(e => e.type === 'wait');
+    objTimelines = buildObjectTimelines(parsedEvents);
+
+    const scrubber = document.getElementById('preview-scrubber');
+    scrubber.max = totalDur;
+    scrubber.step = totalDur / 2000;
+
+    // Don't reset animTime — keep playing where we are (clamped)
+    if (animTime > totalDur) { animTime = 0; animStartTs = null; }
+
+    drawPreview(animTime);
+  }
+
+  // ── Canvas sizing ──
+  function resizeCanvas() {
+    const wrap = document.getElementById('preview-canvas-wrap');
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    drawPreview(animTime);
+  }
+
+  // ── Viewport: auto-fit all keyframes ──
+  function computeViewport() {
+    // Z is left/right (horizontal), X is up/down (vertical)
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, any = false;
+    for (const tl of Object.values(objTimelines)) {
+      for (const k of tl) {
+        minX = Math.min(minX, k.x); maxX = Math.max(maxX, k.x);
+        minZ = Math.min(minZ, k.z); maxZ = Math.max(maxZ, k.z);
+        any = true;
+      }
+    }
+    if (!any) return { cx: 0, cz: 0, scale: 20 };
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    const spanZ = Math.max(maxZ - minZ, 1); // Z fills canvas width
+    const spanX = Math.max(maxX - minX, 1); // X fills canvas height
+    const pad = 0.3;
+    const scaleH = canvas.width  / (spanZ * (1 + pad * 2));
+    const scaleV = canvas.height / (spanX * (1 + pad * 2));
+    const scale = Math.min(scaleH, scaleV, 100, Math.max(canvas.width, canvas.height) / 2);
+    return { cx, cz, scale: Math.max(scale, 4) };
+  }
+
+  // Z -> screen horizontal (left/right), X -> screen vertical (+X = up)
+  function toCanvas(wx, wz, vp) {
+    return {
+      cx: canvas.width  / 2 + (wz - vp.cz) * vp.scale,
+      cy: canvas.height / 2 - (wx - vp.cx) * vp.scale,
+    };
+  }
+
+  function drawGrid(vp) {
+    const W = canvas.width, H = canvas.height;
+    const worldW = W / vp.scale; // Z span visible
+    const worldH = H / vp.scale; // X span visible
+
+    // Pick a nice step
+    const rawStep = Math.max(worldW, worldH) / 8;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    let step = mag;
+    if (rawStep / mag > 5) step = mag * 5;
+    else if (rawStep / mag > 2) step = mag * 2;
+
+    // Z varies left-right -> vertical grid lines
+    const startZ = Math.floor((vp.cz - worldW / 2) / step) * step;
+    // X varies up-down -> horizontal grid lines
+    const startX = Math.floor((vp.cx - worldH / 2) / step) * step;
+
+    ctx.strokeStyle = '#1e1e1e';
+    ctx.lineWidth = 1;
+    for (let wz = startZ; wz < startZ + worldW + step; wz += step) {
+      const cx = W / 2 + (wz - vp.cz) * vp.scale;
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+    }
+    for (let wx = startX; wx < startX + worldH + step; wx += step) {
+      const cy = H / 2 - (wx - vp.cx) * vp.scale;
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+    }
+
+    // Axis lines through origin
+    const o = toCanvas(0, 0, vp);
+    ctx.strokeStyle = '#2e2e2e';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(o.cx, 0); ctx.lineTo(o.cx, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, o.cy); ctx.lineTo(W, o.cy); ctx.stroke();
+
+    // Grid labels: Z values along bottom, X values along left side
+    ctx.fillStyle = '#333';
+    ctx.font = '9px Consolas, monospace';
+    ctx.textAlign = 'center';
+    for (let wz = startZ; wz < startZ + worldW + step; wz += step) {
+      if (Math.abs(wz) < step * 0.01) continue;
+      const cx = W / 2 + (wz - vp.cz) * vp.scale;
+      if (cx < 4 || cx > W - 4) continue;
+      ctx.fillText(wz % 1 === 0 ? wz : wz.toFixed(1), cx, H - 3);
+    }
+    ctx.textAlign = 'left';
+    for (let wx = startX; wx < startX + worldH + step; wx += step) {
+      if (Math.abs(wx) < step * 0.01) continue;
+      const cy = H / 2 - (wx - vp.cx) * vp.scale;
+      if (cy < 10 || cy > H - 10) continue;
+      ctx.fillText(wx % 1 === 0 ? wx : wx.toFixed(1), 3, cy + 3);
+    }
+
+    // Origin dot
+    ctx.beginPath(); ctx.arc(o.cx, o.cy, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#333'; ctx.fill();
+
+    // Axis labels
+    ctx.fillStyle = '#3a3a3a';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'right'; ctx.fillText('z', W - 4, H / 2 - 4); // Z goes right
+    ctx.textAlign = 'left';  ctx.fillText('x', o.cx + 4, 12);     // X goes up
+  }
+
+  function drawPreview(t) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, W, H);
+
+    const vp = computeViewport();
+    const uids = Object.keys(objTimelines);
+
+    if (!uids.length) {
+      ctx.fillStyle = '#333';
+      ctx.font = '11px Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('add create / tween / move commands', W / 2, H / 2);
+      return;
+    }
+
+    drawGrid(vp);
+
+    // Check if currently in a wait
+    const activeWait = waitEvents.find(w => t >= w.t && t < w.t + w.duration);
+
+    // Draw ghost paths (full trajectory dashed)
+    ctx.setLineDash([3, 5]);
+    for (const uid of uids) {
+      const tl = objTimelines[uid];
+      if (tl.length < 2) continue;
+      ctx.strokeStyle = colorForUid(uid) + '33';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < tl.length; i++) {
+        const p = toCanvas(tl[i].x, tl[i].z, vp);
+        i === 0 ? ctx.moveTo(p.cx, p.cy) : ctx.lineTo(p.cx, p.cy);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Draw active tween segment
+    for (const uid of uids) {
+      const tl = objTimelines[uid];
+      for (let i = 0; i < tl.length - 1; i++) {
+        if (t > tl[i].t && t <= tl[i + 1].t) {
+          const a = toCanvas(tl[i].x, tl[i].z, vp);
+          const b = toCanvas(tl[i + 1].x, tl[i + 1].z, vp);
+          ctx.strokeStyle = colorForUid(uid) + 'bb';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(a.cx, a.cy);
+          ctx.lineTo(b.cx, b.cy);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Draw keyframe dots on path
+    for (const uid of uids) {
+      const tl = objTimelines[uid];
+      const col = colorForUid(uid);
+      for (const k of tl) {
+        const p = toCanvas(k.x, k.z, vp);
+        ctx.beginPath(); ctx.arc(p.cx, p.cy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = col + '55';
+        ctx.fill();
+      }
+    }
+
+    // Draw current object positions
+    for (const uid of uids) {
+      const tl = objTimelines[uid];
+      const pos = getPosAt(tl, t);
+      const cp = toCanvas(pos.x, pos.z, vp);
+      const col = colorForUid(uid);
+      const label = uid.startsWith('__create_') ? `obj${parseInt(uid.slice(9)) + 1}` : uid;
+
+      // Outer ring
+      ctx.beginPath(); ctx.arc(cp.cx, cp.cy, 7, 0, Math.PI * 2);
+      ctx.fillStyle = col + '22'; ctx.fill();
+
+      // Main dot
+      ctx.beginPath(); ctx.arc(cp.cx, cp.cy, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Label
+      ctx.font = '10px Consolas, monospace';
+      ctx.fillStyle = col;
+      ctx.textAlign = 'left';
+      ctx.fillText(label, cp.cx + 9, cp.cy - 5);
+
+      // Coord
+      ctx.font = '9px Consolas, monospace';
+      ctx.fillStyle = '#555';
+      ctx.fillText(`z:${pos.z.toFixed(1)} x:${pos.x.toFixed(1)}`, cp.cx + 9, cp.cy + 5);
+    }
+
+    // Wait overlay: semi-transparent banner at bottom
+    if (activeWait) {
+      const remaining = (activeWait.t + activeWait.duration - t).toFixed(2);
+      const elapsed = (t - activeWait.t).toFixed(2);
+      const progress = (t - activeWait.t) / activeWait.duration;
+
+      // Bottom banner
+      ctx.fillStyle = 'rgba(229,192,123,0.07)';
+      ctx.fillRect(0, H - 28, W, 28);
+      ctx.strokeStyle = 'rgba(229,192,123,0.2)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(0, H - 28); ctx.lineTo(W, H - 28); ctx.stroke();
+
+      // Progress bar
+      ctx.fillStyle = 'rgba(229,192,123,0.15)';
+      ctx.fillRect(0, H - 4, W * progress, 4);
+      ctx.fillStyle = 'rgba(229,192,123,0.5)';
+      ctx.fillRect(0, H - 4, W * progress, 4);
+
+      ctx.font = '10px Consolas, monospace';
+      ctx.fillStyle = '#e5c07b';
+      ctx.textAlign = 'left';
+      ctx.fillText(`wait  ${remaining}s remaining`, 8, H - 10);
+    }
+
+    // Timeline scrubber timeline bar at very top (2px) showing wait regions
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillRect(0, 0, W, 3);
+    for (const w of waitEvents) {
+      const x1 = (w.t / totalDur) * W;
+      const x2 = ((w.t + w.duration) / totalDur) * W;
+      ctx.fillStyle = 'rgba(229,192,123,0.35)';
+      ctx.fillRect(x1, 0, x2 - x1, 3);
+    }
+    // Playhead on timeline bar
+    const headX = (t / totalDur) * W;
+    ctx.fillStyle = '#61afef';
+    ctx.fillRect(headX - 0.5, 0, 1.5, 3);
+  }
+
+  // ── Playback ──
+  function animLoop(ts) {
+    if (playing) {
+      if (animStartTs === null) animStartTs = ts - animTime * 1000;
+      animTime = (ts - animStartTs) / 1000;
+      if (animTime >= totalDur) {
+        animTime = 0;
+        animStartTs = ts;
+      }
+      const scrubber = document.getElementById('preview-scrubber');
+      scrubber.value = animTime;
+      document.getElementById('preview-time').textContent =
+        animTime.toFixed(1) + 's / ' + totalDur.toFixed(1) + 's';
+      drawPreview(animTime);
+    }
+    requestAnimationFrame(animLoop);
+  }
+
+  // Controls
+  const btnPlay = document.getElementById('btn-play');
+  const btnReset = document.getElementById('btn-reset-anim');
+  const scrubber = document.getElementById('preview-scrubber');
+  const timeLabel = document.getElementById('preview-time');
+
+  btnPlay.addEventListener('click', () => {
+    playing = !playing;
+    btnPlay.textContent = playing ? 'pause' : 'play';
+    btnPlay.classList.toggle('active', playing);
+    if (playing) animStartTs = null;
+  });
+
+  btnReset.addEventListener('click', () => {
+    animTime = 0;
+    animStartTs = null;
+    scrubber.value = 0;
+    timeLabel.textContent = '0.0s / ' + totalDur.toFixed(1) + 's';
+    drawPreview(0);
+  });
+
+  scrubber.addEventListener('input', () => {
+    playing = false;
+    btnPlay.textContent = 'play';
+    btnPlay.classList.remove('active');
+    animTime = parseFloat(scrubber.value);
+    timeLabel.textContent = animTime.toFixed(1) + 's / ' + totalDur.toFixed(1) + 's';
+    drawPreview(animTime);
+  });
+
+  // ── Panel resize ──
+  const resizeHandle = document.getElementById('preview-resize');
+  const previewPanel = document.getElementById('preview-panel');
+  let rDragging = false, rStartX = 0, rStartW = 0;
+
+  resizeHandle.addEventListener('mousedown', e => {
+    rDragging = true; rStartX = e.clientX; rStartW = previewPanel.offsetWidth;
+    resizeHandle.classList.add('dragging'); e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!rDragging) return;
+    const newW = Math.max(200, Math.min(600, rStartW + (rStartX - e.clientX)));
+    previewPanel.style.width = newW + 'px';
+    resizeCanvas(); editor.layout();
+  });
+  document.addEventListener('mouseup', () => {
+    if (rDragging) { rDragging = false; resizeHandle.classList.remove('dragging'); }
+  });
+
+  window.addEventListener('resize', () => { resizeCanvas(); editor.layout(); });
+
+  // ── Init ──
+  setTimeout(() => {
+    resizeCanvas();
+    rebuildTimeline();
+    requestAnimationFrame(animLoop);
+  }, 150);
 });
 </script>
 </body>
