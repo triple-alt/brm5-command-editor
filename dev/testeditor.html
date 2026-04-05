@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
+#app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
+#editor-wrap { flex: 1; min-height: 0; }
+#bottom { display: flex; height: 200px; border-top: 1px solid #333; }
+#error-panel { flex: 1; background: #111; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+#error-header {
+  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
+  font-family: Consolas, monospace; font-size: 12px; color: #888;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+#error-count { color: #db3240; font-weight: 600; }
+.hdr-btn {
+  background: none; border: 1px solid #444; color: #888;
+  font-family: Consolas, monospace; font-size: 11px; padding: 1px 8px;
+  cursor: pointer; border-radius: 3px;
+}
+.hdr-btn:hover { background: #2a2a2a; color: #abb2bf; border-color: #555; }
+#error-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.err-row {
+  display: grid; grid-template-columns: 28px 60px 60px 1fr;
+  padding: 3px 12px; font-family: Consolas, monospace; font-size: 12px;
+  cursor: pointer; gap: 8px; align-items: center;
+}
+.err-row:hover { background: #1e1e1e; }
+.err-icon { text-align: center; font-size: 11px; }
+.err-icon.error { color: #e06c75; }
+.err-icon.warning { color: #e5c07b; }
+.err-icon.hint { color: #61afef; }
+.err-pos { color: #666; }
+.err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
+#tween-panel {
+  width: 280px; flex-shrink: 0; background: #0e0e0e;
+  border-left: 1px solid #333; display: flex; flex-direction: column;
+}
+#tween-header {
+  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
+  font-family: Consolas, monospace; font-size: 12px; color: #888;
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+#tween-controls { display: flex; gap: 4px; }
+#tween-canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+canvas#tween-canvas { display: block; width: 100%; height: 100%; }
+#tween-status {
+  position: absolute; bottom: 6px; left: 0; right: 0; text-align: center;
+  font-family: Consolas, monospace; font-size: 11px; color: #444; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="editor-wrap"></div>
+  <div id="bottom">
+    <div id="error-panel">
+      <div id="error-header">
+        <span>errors</span>
+        <span id="error-count">0 errors</span>
+        <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+          <button class="hdr-btn" id="btn-import">Import</button>
+          <button class="hdr-btn" id="btn-export">Export</button>
+          <span style="color: #666;">made with claude</span>
+        </span>
+      </div>
+      <div id="error-list"><div id="no-errors">no errors</div></div>
+    </div>
+    <div id="tween-panel">
+      <div id="tween-header">
+        <span>tween preview</span>
+        <div id="tween-controls">
+          <button class="hdr-btn" id="btn-play">play</button>
+          <button class="hdr-btn" id="btn-stop">stop</button>
+        </div>
+      </div>
+      <div id="tween-canvas-wrap">
+        <canvas id="tween-canvas"></canvas>
+        <div id="tween-status">no tweens found</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
+<script>
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+
+  const LANG = 'cmdLang';
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const VAR_RE  = /^%[a-zA-Z_]\w*$/;
+  function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
+
+  const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
+  const TRIGGER_SUB     = ['add','remove','color','set','activate','reset','create','delete','executable','whitelist'];
+  const WORLD_SUB       = ['list','load'];
+  const TIME_SUB        = ['start','stop','now','set'];
+  const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','savemodel','deletemodel','insertmodel'];
+  const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
+  const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground'];
+  const MATERIALS       = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_clad10","brick_clad11","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_old2","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_tiles10","marble_tiles11","marble_tiles12","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
+
+  const CMDS = {
+    create:    { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).' },
+    tween:     { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.' },
+    color:     { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0-255).' },
+    material:  { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.' },
+    reset:     { params: [], doc: 'Reset the entire scene to its default state.' },
+    explosion: { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given type.' },
+    move:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part.' },
+    size:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
+    wait:      { params: [{name:'duration',type:'number'}], doc: 'Waits a set duration before proceeding.' },
+    ban:       { params: [{name:'player',type:'string'}], doc: 'Bans specified player.' },
+    kick:      { params: [{name:'player',type:'string'}], doc: 'Kicks specified player.' },
+    duplicate: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates specified part.' },
+    trigger: {
+      params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
+      subtypes: {
+        add:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds trigger to specified part.' },
+        remove:     { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Removes trigger from specified part.' },
+        color:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Changes trigger hitbox color.' },
+        set:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Applies specified trigger to specified part.' },
+        activate:   { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Activates specified trigger.' },
+        reset:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Resets specified trigger.' },
+        create:     { params: [{name:'world',type:'number'},{name:'name',type:'string'}], doc: 'Creates a new trigger.' },
+        delete:     { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Deletes specified trigger.' },
+        executable: { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}], doc: 'Adds a command to specified line of a specified trigger.' },
+        whitelist:  { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Manages trigger whitelist.' },
+      },
+      doc: 'Create, edit and add things to triggers.',
+    },
+    world: {
+      params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
+      subtypes: {
+        list: { params: [], doc: 'Lists all available worlds.' },
+        load: { params: [{name:'savefile',type:'string'},{name:'world',type:'number'}], doc: 'Loads a world from a savefile.' },
+      },
+      doc: 'Load or list worlds.',
+    },
+    time: {
+      params: [{name:'subtype',type:'enum',values:TIME_SUB}],
+      subtypes: {
+        start: { params: [], doc: 'Starts the time cycle.' },
+        stop:  { params: [], doc: 'Stops the time cycle.' },
+        now:   { params: [], doc: 'Returns the current time.' },
+        set:   { params: [{name:'time',type:'number'}], doc: 'Sets the time to a specific value.' },
+      },
+      doc: 'Become a time traveller.',
+    },
+    file: {
+      params: [{name:'subtype',type:'enum',values:FILE_SUB}],
+      subtypes: {
+        save:        { params: [{name:'name',type:'string'}], doc: 'Saves the current map.' },
+        load:        { params: [{name:'name',type:'string'}], doc: 'Loads a map file.' },
+        delete:      { params: [{name:'name',type:'string'}], doc: 'Deletes a map file.' },
+        loadcopy:    { params: [{name:'name',type:'string'}], doc: 'Loads a copy of a map file.' },
+        savecopy:    { params: [{name:'name',type:'string'}], doc: 'Saves a copy of the current map.' },
+        list:        { params: [], doc: 'Lists all available files.' },
+        savemodel:   { params: [{name:'name',type:'string'},{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Saves a part as a model.' },
+        deletemodel: { params: [{name:'name',type:'string'}], doc: 'Deletes a model file.' },
+        insertmodel: { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'r',type:'number'}], doc: 'Inserts a model into the world.' },
+      },
+      doc: 'Edit map and model files.',
+    },
+  };
+
+  monaco.languages.register({ id: LANG });
+  monaco.languages.setMonarchTokensProvider(LANG, {
+    tokenizer: {
+      root: [
+        [/\b(create|tween|color|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(true|false)\b/, 'constant'],
+        [/%[a-zA-Z_]\w*/, 'type'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
+        [/-?\d+(\.\d+)?/, 'number'],
+        [/"[^"]*"/, 'string'],
+        [/'[^']*'/, 'string'],
+      ]
+    }
+  });
+
+  function parseLine(line) {
+    const trimmed = line.trimStart();
+    const leadingSpaces = line.length - trimmed.length;
+    const tokens = [];
+    let i = 0;
+    while (i < trimmed.length) {
+      if (trimmed[i] === ' ') { i++; continue; }
+      const start = i;
+      while (i < trimmed.length && trimmed[i] !== ' ') i++;
+      tokens.push({ value: trimmed.slice(start, i), col: leadingSpaces + start + 1 });
+    }
+    return tokens;
+  }
+
+  function getRestParamIndex(params) { return params.findIndex(p => p.type === 'command'); }
+
+  function parseLineWithRest(line, restTokenIdx) {
+    const tokens = parseLine(line);
+    if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
+    const restCol = tokens[restTokenIdx].col;
+    return [...tokens.slice(0, restTokenIdx), { value: line.slice(restCol - 1), col: restCol, isRest: true }];
+  }
+
+  function getTokens(line) {
+    const raw = parseLine(line);
+    if (!raw.length) return raw;
+    const spec = CMDS[raw[0].value.toLowerCase()];
+    if (!spec) return raw;
+    const params = resolveParams(spec, raw);
+    const restIdx = getRestParamIndex(params);
+    if (restIdx < 0) return raw;
+    return parseLineWithRest(line, restIdx + 1);
+  }
+
+  function resolveParams(spec, tokens) {
+    if (!spec.subtypes) return spec.params;
+    const subtypeVal = tokens[1] ? tokens[1].value : null;
+    const sub = subtypeVal && spec.subtypes[subtypeVal];
+    const extra = sub ? (sub.params ?? sub) : [];
+    return [...spec.params, ...extra];
+  }
+
+  // Extract named args from a line using resolveParams
+  function extractNamedArgs(line) {
+    const tokens = parseLine(line);
+    if (!tokens.length) return null;
+    const cmdName = tokens[0].value.toLowerCase();
+    const spec = CMDS[cmdName];
+    if (!spec) return null;
+    const params = resolveParams(spec, tokens);
+    const args = tokens.slice(1);
+    const result = { _cmd: cmdName };
+    params.forEach((p, i) => {
+      const raw = args[i]?.value;
+      if (raw === undefined) return;
+      result[p.name] = p.type === 'number' ? parseFloat(raw) : raw;
+    });
+    return result;
+  }
+
+  function getActiveParamIndex(tokens, cursorCol) {
+    let paramIdx = -1;
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].col <= cursorCol) paramIdx = i - 1;
+    }
+    const last = tokens[tokens.length - 1];
+    if (last && cursorCol > last.col + last.value.length) paramIdx = tokens.length - 1;
+    return Math.max(0, paramIdx);
+  }
+
+  function paramLabel(p) {
+    if (p.type === 'enum')    return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|...' : ''}`;
+    if (p.type === 'uid')     return `${p.name}: uid`;
+    if (p.type === 'command') return `${p.name}: <command>`;
+    let label = `${p.name}: ${p.type}`;
+    if (p.default !== undefined) label += ` = ${p.default}`;
+    return label;
+  }
+
+  function paramDoc(p) {
+    if (p.type === 'enum')    return { value: `Valid values:\n${p.values.map(v => '- ' + v).join('\n')}` };
+    if (p.type === 'uid')     return { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` or `%variableName`' };
+    if (p.type === 'command') return { value: `A full command to execute.\nValid commands: ${Object.keys(CMDS).join(', ')}` };
+    return { value: `Type: ${p.type}` };
+  }
+
+  function nestedCommandSuggestions(nestedText, cursorCol, range) {
+    const textUpToCursor = nestedText.slice(0, cursorCol);
+    const tokensUpToCursor = parseLine(textUpToCursor);
+    if (!tokensUpToCursor.length || (tokensUpToCursor.length === 1 && !textUpToCursor.endsWith(' '))) {
+      return Object.entries(CMDS).map(([name, spec]) => ({
+        label: name, kind: monaco.languages.CompletionItemKind.Function,
+        detail: spec.params.map(p => p.name).join(' '), documentation: { value: spec.doc },
+        insertText: name, range
+      }));
+    }
+    const nestedSpec = CMDS[tokensUpToCursor[0].value.toLowerCase()];
+    if (!nestedSpec) return [];
+    const nestedParams = resolveParams(nestedSpec, tokensUpToCursor);
+    const paramIdx = textUpToCursor.endsWith(' ') ? tokensUpToCursor.length - 1 : tokensUpToCursor.length - 2;
+    if (paramIdx < 0 || paramIdx >= nestedParams.length) return [];
+    const param = nestedParams[paramIdx];
+    if (param.type !== 'enum') return [];
+    return param.values.map(v => ({ label: v, kind: monaco.languages.CompletionItemKind.EnumMember, insertText: v, range }));
+  }
+
+  function nestedCommandSignature(nestedText, cursorCol, outerCmdName) {
+    const tokens = parseLine(nestedText);
+    if (!tokens.length) return null;
+    const spec = CMDS[tokens[0].value.toLowerCase()];
+    if (!spec) return null;
+    const params = resolveParams(spec, tokens);
+    if (!params.length) return null;
+    const activeParam = getActiveParamIndex(parseLine(nestedText.slice(0, cursorCol)), cursorCol);
+    const paramLabels = params.map(paramLabel);
+    return {
+      value: {
+        signatures: [{ label: `[${outerCmdName}] ${tokens[0].value}  ${paramLabels.join('  ')}`, documentation: { value: spec.doc },
+          parameters: params.map((p, idx) => ({ label: paramLabels[idx], documentation: paramDoc(p) })) }],
+        activeSignature: 0, activeParameter: Math.min(activeParam, params.length - 1)
+      }, dispose() {}
+    };
+  }
+
+  monaco.languages.registerSignatureHelpProvider(LANG, {
+    signatureHelpTriggerCharacters: [' ', '\t'],
+    signatureHelpRetriggerCharacters: [' '],
+    provideSignatureHelp(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const tokens = getTokens(line);
+      if (!tokens.length) return null;
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) return null;
+      const params = resolveParams(spec, tokens);
+      if (!params.length) return null;
+      const activeParam = getActiveParamIndex(tokens, position.column);
+      const currentParam = params[Math.min(activeParam, params.length - 1)];
+      if (currentParam && currentParam.type === 'command') {
+        const restToken = tokens.find(t => t.isRest);
+        if (restToken) return nestedCommandSignature(restToken.value, position.column - restToken.col, cmdName);
+      }
+      const paramLabels = params.map(paramLabel);
+      return {
+        value: {
+          signatures: [{ label: `${cmdName}  ${paramLabels.join('  ')}`, documentation: { value: spec.doc },
+            parameters: params.map((p, idx) => ({ label: paramLabels[idx], documentation: paramDoc(p) })) }],
+          activeSignature: 0, activeParameter: Math.min(activeParam, params.length - 1)
+        }, dispose() {}
+      };
+    }
+  });
+
+  monaco.languages.registerCompletionItemProvider(LANG, {
+    triggerCharacters: [' ', '\t'],
+    provideCompletionItems(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const textBefore = line.slice(0, position.column - 1);
+      const rawTokensBefore = parseLine(textBefore);
+      const wordInfo = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+        startColumn: wordInfo.startColumn || position.column, endColumn: wordInfo.endColumn || position.column
+      };
+      if (!rawTokensBefore.length || (rawTokensBefore.length === 1 && !textBefore.endsWith(' '))) {
+        return { suggestions: Object.entries(CMDS).map(([name, spec]) => ({
+          label: name, kind: monaco.languages.CompletionItemKind.Function,
+          detail: spec.params.map(p => p.name).join(' '), documentation: { value: spec.doc }, insertText: name, range
+        })) };
+      }
+      const cmdName = rawTokensBefore[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) return { suggestions: [] };
+      const params = resolveParams(spec, rawTokensBefore);
+      const restIdx = getRestParamIndex(params);
+      if (restIdx >= 0) {
+        const restTokenIdx = restIdx + 1;
+        const rawAll = parseLine(textBefore);
+        if (rawAll.length > restTokenIdx || (rawAll.length === restTokenIdx && textBefore.endsWith(' '))) {
+          const restTokens = rawAll.slice(restTokenIdx);
+          let nestedText = '', cursorInNested = 0;
+          if (restTokens.length > 0) {
+            nestedText = textBefore.slice(restTokens[0].col - 1);
+            cursorInNested = nestedText.length;
+          }
+          return { suggestions: nestedCommandSuggestions(nestedText, cursorInNested, range) };
+        }
+      }
+      const paramIdx = textBefore.endsWith(' ') ? rawTokensBefore.length - 1 : rawTokensBefore.length - 2;
+      if (paramIdx < 0 || paramIdx >= params.length) return { suggestions: [] };
+      const param = params[paramIdx];
+      if (param.type !== 'enum') return { suggestions: [] };
+      return { suggestions: param.values.map(v => ({ label: v, kind: monaco.languages.CompletionItemKind.EnumMember, insertText: v, range })) };
+    }
+  });
+
+  monaco.languages.registerHoverProvider(LANG, {
+    provideHover(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const tokens = getTokens(line);
+      if (!tokens.length) return null;
+      const word = model.getWordAtPosition(position);
+      if (!word) return null;
+      const cmdName = tokens[0].value.toLowerCase();
+      if (word.word.toLowerCase() === cmdName) {
+        const spec = CMDS[cmdName];
+        if (!spec) return null;
+        return { contents: [{ value: `**${cmdName}** ${spec.params.map(p => p.name).join(' ')}` }, { value: spec.doc }] };
+      }
+      const spec = CMDS[cmdName];
+      if (!spec) return null;
+      const params = resolveParams(spec, tokens);
+      const tokIdx = tokens.findIndex(t => t.col <= position.column && position.column <= t.col + t.value.length);
+      if (tokIdx <= 0) return null;
+      const param = params[tokIdx - 1];
+      if (!param) return null;
+      if (param.type === 'command' && tokens[tokIdx].isRest) {
+        const restToken = tokens[tokIdx];
+        const offsetInRest = position.column - restToken.col;
+        const nestedTokens = parseLine(restToken.value);
+        if (nestedTokens.length) {
+          const nestedSpec = CMDS[nestedTokens[0].value.toLowerCase()];
+          if (nestedSpec) {
+            const nestedTokIdx = nestedTokens.findIndex(t => t.col - 1 <= offsetInRest && offsetInRest <= t.col - 1 + t.value.length);
+            if (nestedTokIdx === 0) return { contents: [{ value: `**${nestedTokens[0].value}** (nested)` }, { value: nestedSpec.doc }] };
+            if (nestedTokIdx > 0) {
+              const np = resolveParams(nestedSpec, nestedTokens)[nestedTokIdx - 1];
+              if (np) return { contents: [{ value: `**${np.name}** — \`${np.type}\`` }, paramDoc(np)] };
+            }
+          }
+        }
+      }
+      const header = `**${param.name}** — \`${param.type}\`` + (param.default !== undefined ? ` (default: \`${param.default}\`)` : '');
+      return { contents: [{ value: header }, paramDoc(param)] };
+    }
+  });
+
+  monaco.languages.registerInlayHintsProvider(LANG, {
+    provideInlayHints(model) {
+      const hints = [];
+      for (let ln = 1; ln <= model.getLineCount(); ln++) {
+        const line = model.getLineContent(ln);
+        const tokens = getTokens(line);
+        if (!tokens.length) continue;
+        const cmdName = tokens[0].value.toLowerCase();
+        const spec = CMDS[cmdName];
+        if (!spec) continue;
+        const params = resolveParams(spec, tokens);
+        const args = tokens.slice(1);
+        args.forEach((arg, i) => {
+          if (i >= params.length) return;
+          hints.push({
+            kind: monaco.languages.InlayHintKind.Parameter,
+            position: { lineNumber: ln, column: arg.col },
+            label: params[i].name + ':',
+            paddingRight: true,
+          });
+        });
+      }
+      return { hints, dispose() {} };
+    }
+  });
+
+  let currentMarkers = [];
+  function severityLabel(s) {
+    if (s === monaco.MarkerSeverity.Error)   return { label: 'x', cls: 'error',   text: 'error' };
+    if (s === monaco.MarkerSeverity.Warning) return { label: '!', cls: 'warning', text: 'warning' };
+    return { label: 'i', cls: 'hint', text: 'hint' };
+  }
+
+  function updateErrorPanel(markers, editorRef) {
+    currentMarkers = markers;
+    const list = document.getElementById('error-list');
+    const count = document.getElementById('error-count');
+    const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error).length;
+    const warnings = markers.filter(m => m.severity === monaco.MarkerSeverity.Warning).length;
+    let countStr = '';
+    if (errors)   countStr += `${errors} error${errors>1?'s':''}`;
+    if (warnings) countStr += (countStr ? ', ' : '') + `${warnings} warning${warnings>1?'s':''}`;
+    count.textContent = countStr || '0 errors';
+    count.style.color = errors ? '#e06c75' : warnings ? '#e5c07b' : '#4a4a4a';
+    if (!markers.length) { list.innerHTML = '<div id="no-errors">no errors</div>'; return; }
+    list.innerHTML = markers.map((m, i) => {
+      const s = severityLabel(m.severity);
+      const msg = m.message.replace(/\n/g, ' ');
+      return `<div class="err-row" data-idx="${i}"><span class="err-icon ${s.cls}">${s.label}</span><span class="err-pos">Ln ${m.startLineNumber}</span><span class="err-pos">Col ${m.startColumn}</span><span class="err-msg" title="${msg}">[${s.text}] ${msg}</span></div>`;
+    }).join('');
+    list.querySelectorAll('.err-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const m = currentMarkers[+row.dataset.idx];
+        editorRef.setPosition({ lineNumber: m.startLineNumber, column: m.startColumn });
+        editorRef.revealLineInCenter(m.startLineNumber);
+        editorRef.focus();
+      });
+    });
+  }
+
+  function validate(model, editorRef) {
+    const markers = [];
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const line = model.getLineContent(ln);
+      const tokens = getTokens(line);
+      if (!tokens.length) continue;
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) {
+        markers.push({ severity: monaco.MarkerSeverity.Error, message: `Unknown command "${tokens[0].value}"`, startLineNumber: ln, endLineNumber: ln, startColumn: tokens[0].col, endColumn: tokens[0].col + tokens[0].value.length });
+        continue;
+      }
+      const params = resolveParams(spec, tokens);
+      const args = tokens.slice(1);
+      for (let i = 0; i < args.length; i++) {
+        if (i >= params.length) {
+          markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${args[i].value}" - ${cmdName} takes ${params.length} argument(s)`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + args[i].value.length });
+          continue;
+        }
+        const param = params[i]; const val = args[i].value;
+        if (param.type === 'number' && isNaN(Number(val))) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a number, got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'enum' && !param.values.includes(val)) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}". Expected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'uid' && !isValidUID(val)) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID or variable (e.g. %myVar), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'command') {
+          const nestedTokens = parseLine(val);
+          if (nestedTokens.length) {
+            const nestedCmdName = nestedTokens[0].value.toLowerCase();
+            if (!CMDS[nestedCmdName]) {
+              markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${nestedCmdName}" is not a valid command`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + nestedTokens[0].value.length });
+            } else {
+              const nestedSpec = CMDS[nestedCmdName];
+              const nestedParams = resolveParams(nestedSpec, nestedTokens);
+              const nestedArgs = nestedTokens.slice(1);
+              for (let j = 0; j < nestedArgs.length; j++) {
+                if (j >= nestedParams.length) { markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${nestedArgs[j].value}" for nested command "${nestedCmdName}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nestedArgs[j].value.length }); continue; }
+                const np = nestedParams[j]; const nv = nestedArgs[j].value;
+                if (np.type === 'number' && isNaN(Number(nv))) markers.push({ severity: monaco.MarkerSeverity.Error, message: `Nested param "${np.name}" expects a number, got "${nv}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                else if (np.type === 'enum' && !np.values.includes(nv)) markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${nv}" is not valid for nested param "${np.name}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                else if (np.type === 'uid' && !isValidUID(nv)) markers.push({ severity: monaco.MarkerSeverity.Error, message: `Nested param "${np.name}" expects a UID or %variable`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+              }
+              if (nestedArgs.length < nestedParams.length) {
+                const missing = nestedParams.slice(nestedArgs.length).filter(p => p.default === undefined).map(p => p.name);
+                if (missing.length) markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Nested command missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: line.length + 1, endColumn: line.length + 2 });
+              }
+            }
+          }
+        }
+      }
+      if (args.length < params.length) {
+        const missing = params.slice(args.length).filter(p => p.default === undefined).map(p => p.name);
+        if (missing.length) markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: line.length + 1, endColumn: line.length + 2 });
+      }
+    }
+    monaco.editor.setModelMarkers(model, LANG, markers);
+    updateErrorPanel(markers, editorRef);
+  }
+
+  const initialValue = 'create 1 part 1 1 1';
+  const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
+    value: initialValue, language: LANG, theme: 'vs-dark', fontSize: 14,
+    fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
+    minimap: { enabled: false }, scrollBeyondLastLine: false, renderLineHighlight: 'line',
+    tabSize: 2, wordWrap: 'off', parameterHints: { enabled: true, cycle: true },
+    quickSuggestions: { other: true, comments: false, strings: false },
+    suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on',
+    autoClosingBrackets: 'never', autoClosingQuotes: 'never',
+    inlayHints: { enabled: 'on' },
+  });
+
+  let debounce;
+  editor.onDidChangeModelContent(() => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      validate(editor.getModel(), editor);
+      rebuildTweens();
+    }, 250);
+  });
+  validate(editor.getModel(), editor);
+
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
+  editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const content = editor.getValue();
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'script.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('btn-import').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt';
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        editor.setValue(e.target.result);
+        editor.setPosition({ lineNumber: 1, column: 1 });
+        editor.focus();
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  });
+
+  // ── Tween Preview ────────────────────────────────────────────────
+
+  const canvas = document.getElementById('tween-canvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('tween-status');
+
+  // tweenSequence: array of { uid, fromX, fromY, toX, toY, duration }
+  // grouped by uid so each object tracks its own position
+  let tweenSequence = [];   // flat list of all tweens in order
+  let animFrame = null;
+  let animating = false;
+  let animStartTime = null;
+
+  function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  // Parse all tween commands from editor, return sequence of steps
+  function parseTweens() {
+    const model = editor.getModel();
+    const steps = [];
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const line = model.getLineContent(ln);
+      const named = extractNamedArgs(line);
+      if (!named || named._cmd !== 'tween') continue;
+      const { pUID, duration, pX, pY, pZ } = named;
+      if (!pUID || isNaN(duration) || duration <= 0) continue;
+      steps.push({ uid: pUID, duration, toX: isNaN(pX) ? 0 : pX, toY: isNaN(pY) ? 0 : pY });
+    }
+    return steps;
+  }
+
+  // Build the full sequence with from/to positions per object
+  function buildSequence(steps) {
+    const lastPos = {}; // uid -> { x, y }
+    return steps.map(s => {
+      const from = lastPos[s.uid] || { x: 0, y: 0 };
+      const step = { uid: s.uid, duration: s.duration, fromX: from.x, fromY: from.y, toX: s.toX, toY: s.toY };
+      lastPos[s.uid] = { x: s.toX, y: s.toY };
+      return step;
+    });
+  }
+
+  function rebuildTweens() {
+    stopAnim();
+    tweenSequence = buildSequence(parseTweens());
+    drawStatic();
+  }
+
+  // Map world coords to canvas coords
+  // X = horizontal (right), Y = vertical (up in world = up on canvas)
+  function worldToCanvas(wx, wy, bounds, w, h) {
+    const pad = 24;
+    const scaleX = (w - pad*2) / (bounds.maxX - bounds.minX || 1);
+    const scaleY = (h - pad*2) / (bounds.maxY - bounds.minY || 1);
+    const scale = Math.min(scaleX, scaleY);
+    const cx = w/2 + (wx - (bounds.minX + bounds.maxX)/2) * scale;
+    const cy = h/2 - (wy - (bounds.minY + bounds.maxY)/2) * scale; // invert Y
+    return { x: cx, y: cy };
+  }
+
+  function getBounds(seq) {
+    if (!seq.length) return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    const xs = seq.flatMap(s => [s.fromX, s.toX]);
+    const ys = seq.flatMap(s => [s.fromY, s.toY]);
+    let minX = Math.min(...xs), maxX = Math.max(...xs);
+    let minY = Math.min(...ys), maxY = Math.max(...ys);
+    // ensure some range so single-point doesn't collapse
+    if (maxX - minX < 2) { minX -= 1; maxX += 1; }
+    if (maxY - minY < 2) { minY -= 1; maxY += 1; }
+    return { minX, maxX, minY, maxY };
+  }
+
+  // Assign a stable colour per UID
+  const uidColors = {};
+  const palette = ['#61afef','#e5c07b','#98c379','#e06c75','#c678dd','#56b6c2','#d19a66'];
+  let colorIdx = 0;
+  function colorFor(uid) {
+    if (!uidColors[uid]) { uidColors[uid] = palette[colorIdx++ % palette.length]; }
+    return uidColors[uid];
+  }
+
+  function drawStatic() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!tweenSequence.length) {
+      statusEl.textContent = 'no tweens found';
+      return;
+    }
+    statusEl.textContent = '';
+
+    const bounds = getBounds(tweenSequence);
+
+    // Draw path lines and waypoints
+    tweenSequence.forEach(s => {
+      const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
+      const to   = worldToCanvas(s.toX,   s.toY,   bounds, w, h);
+      const col  = colorFor(s.uid);
+
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.strokeStyle = col + '55';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // arrow head
+      const angle = Math.atan2(to.y - from.y, to.x - from.x);
+      ctx.beginPath();
+      ctx.moveTo(to.x, to.y);
+      ctx.lineTo(to.x - 7*Math.cos(angle-0.4), to.y - 7*Math.sin(angle-0.4));
+      ctx.lineTo(to.x - 7*Math.cos(angle+0.4), to.y - 7*Math.sin(angle+0.4));
+      ctx.closePath();
+      ctx.fillStyle = col + '88';
+      ctx.fill();
+
+      // destination dot
+      ctx.beginPath();
+      ctx.arc(to.x, to.y, 3, 0, Math.PI*2);
+      ctx.fillStyle = col;
+      ctx.fill();
+    });
+
+    // Draw starting positions per uid
+    const starts = {};
+    tweenSequence.forEach(s => { if (!starts[s.uid]) starts[s.uid] = { x: s.fromX, y: s.fromY }; });
+    Object.entries(starts).forEach(([uid, pos]) => {
+      const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
+      const col = colorFor(uid);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+      ctx.fillStyle = col + '44';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      ctx.fill();
+      ctx.stroke();
+    });
+
+    // axis labels
+    ctx.fillStyle = '#333';
+    ctx.font = '10px Consolas, monospace';
+    ctx.fillText('X →', w - 22, h - 6);
+    ctx.fillText('Y ↑', 4, 12);
+  }
+
+  // During animation: given elapsed time, compute current position of each uid
+  function drawAnimFrame(elapsed) {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!tweenSequence.length) return;
+    const bounds = getBounds(tweenSequence);
+
+    // Draw static paths faintly
+    tweenSequence.forEach(s => {
+      const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
+      const to   = worldToCanvas(s.toX,   s.toY,   bounds, w, h);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.strokeStyle = colorFor(s.uid) + '22';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Figure out total duration for progress bar
+    const totalDur = tweenSequence.reduce((a, s) => a + s.duration, 0);
+
+    // Current positions: run through sequence accumulating time
+    const currentPos = {}; // uid -> { x, y }
+    let t = 0;
+    tweenSequence.forEach(s => {
+      const start = t, end = t + s.duration;
+      if (elapsed >= end) {
+        currentPos[s.uid] = { x: s.toX, y: s.toY };
+      } else if (elapsed >= start) {
+        const frac = easeInOut((elapsed - start) / s.duration);
+        currentPos[s.uid] = {
+          x: s.fromX + (s.toX - s.fromX) * frac,
+          y: s.fromY + (s.toY - s.fromY) * frac,
+        };
+      } else if (!currentPos[s.uid]) {
+        currentPos[s.uid] = { x: s.fromX, y: s.fromY };
+      }
+      t = end;
+    });
+
+    // Draw objects
+    Object.entries(currentPos).forEach(([uid, pos]) => {
+      const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
+      const col = colorFor(uid);
+      const boxSize = 12;
+      ctx.fillStyle = col + '33';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(p.x - boxSize/2, p.y - boxSize/2, boxSize, boxSize);
+      ctx.strokeRect(p.x - boxSize/2, p.y - boxSize/2, boxSize, boxSize);
+    });
+
+    // Progress bar
+    const barX = 12, barY = h - 10, barW = w - 24;
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillRect(barX, barY, barW, 3);
+    const prog = Math.min(elapsed / totalDur, 1);
+    ctx.fillStyle = '#378add';
+    ctx.fillRect(barX, barY, barW * prog, 3);
+
+    // time label
+    ctx.fillStyle = '#555';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${elapsed.toFixed(1)}s / ${totalDur.toFixed(1)}s`, w - 12, barY - 3);
+    ctx.textAlign = 'left';
+
+    // axis labels
+    ctx.fillStyle = '#333';
+    ctx.font = '10px Consolas, monospace';
+    ctx.fillText('X →', w - 22, h - 14);
+    ctx.fillText('Y ↑', 4, 12);
+  }
+
+  function animLoop() {
+    if (!animating) return;
+    const elapsed = (Date.now() - animStartTime) / 1000;
+    const totalDur = tweenSequence.reduce((a, s) => a + s.duration, 0);
+    drawAnimFrame(Math.min(elapsed, totalDur));
+    if (elapsed < totalDur) {
+      animFrame = requestAnimationFrame(animLoop);
+    } else {
+      animating = false;
+      document.getElementById('btn-play').textContent = 'play';
+      drawStatic();
+    }
+  }
+
+  function startAnim() {
+    if (!tweenSequence.length) return;
+    cancelAnimationFrame(animFrame);
+    animating = true;
+    animStartTime = Date.now();
+    document.getElementById('btn-play').textContent = 'pause';
+    animLoop();
+  }
+
+  function stopAnim() {
+    cancelAnimationFrame(animFrame);
+    animating = false;
+    document.getElementById('btn-play').textContent = 'play';
+    drawStatic();
+  }
+
+  document.getElementById('btn-play').addEventListener('click', () => {
+    if (animating) stopAnim(); else startAnim();
+  });
+  document.getElementById('btn-stop').addEventListener('click', stopAnim);
+
+  function resizeCanvas() {
+    const wrap = document.getElementById('tween-canvas-wrap');
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    if (!animating) drawStatic();
+  }
+
+  new ResizeObserver(resizeCanvas).observe(document.getElementById('tween-canvas-wrap'));
+  resizeCanvas();
+  rebuildTweens();
+});
+</script>
+</body>
+</html>
