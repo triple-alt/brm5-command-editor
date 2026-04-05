@@ -107,16 +107,16 @@ require(['vs/editor/editor.main'], function () {
     world: {
       params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
       subtypes: {
-        list:,
+        list: { params: [] },
         load:     { params: [{name:'savefile',type:'string'},{name:'world',type:'number'}]},
       },
       doc: 'Load or list worlds.',
     time: {
       params: [{name:'subtype',type:'enum',values:TIME_SUB}],
       subtypes: {
-        start:,
-        stop:,
-        now:,
+        start: { params: [] },
+        stop: { params: [] },
+        now: { params: [] },
         set:     { params: [{name:'time',type:'number'}]},
       },
       doc: 'Become a time traveller',
@@ -128,7 +128,7 @@ require(['vs/editor/editor.main'], function () {
         delete:      { params: [{name:'name',type:'string'}},
         loadcopy:        { params: [{name:'name',type:'string'}},
         savecopy:   { params: [{name:'name',type:'string'}},
-        list:,
+        list: { params: [] },
         savemodel:     { params: [{name:'name',type:'string'},{name:'world',type:'number'}],{name:'uID',type:'uid'}], doc: 'Creates a new trigger.' },
         deletemodel:    { params: [{name:'name',type:'string'}},
         insertmodel: { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'r',type:'number'}], doc: 'Adds a command to specified line of a specified trigger.' },
