@@ -227,7 +227,6 @@ require(['vs/editor/editor.main'], function () {
     return [...spec.params, ...extra];
   }
 
-  // Extract named args from a line using resolveParams
   function extractNamedArgs(line) {
     const tokens = parseLine(line);
     if (!tokens.length) return null;
@@ -601,17 +600,19 @@ require(['vs/editor/editor.main'], function () {
   const ctx = canvas.getContext('2d');
   const statusEl = document.getElementById('tween-status');
 
-  // tweenSequence: array of { uid, fromX, fromY, toX, toY, duration }
-  // grouped by uid so each object tracks its own position
-  let tweenSequence = [];   // flat list of all tweens in order
+  // Each entry in tweenSequence is either:
+  //   { _wait: true, duration }
+  //   { uid, duration, fromX, fromY, toX, toY }
+  // X = pX (left/right), Y = pZ (front/back shown as up/down)
+  let tweenSequence = [];
   let animFrame = null;
   let animating = false;
   let animStartTime = null;
 
   function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
 
-  // Parse all tween commands from editor, return sequence of steps
-  function parseTweens() {
+  // Read editor, return flat list of raw steps (tween or wait)
+  function parseRawSteps() {
     const model = editor.getModel();
     const steps = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
@@ -622,18 +623,22 @@ require(['vs/editor/editor.main'], function () {
         const dur = named.duration;
         if (!isNaN(dur) && dur > 0) steps.push({ _wait: true, duration: dur });
       } else if (named._cmd === 'tween') {
-        const { pUID, duration, pX, pZ } = named;
-        if (!pUID || isNaN(duration) || duration <= 0) continue;
-        steps.push({ uid: pUID, duration, toX: isNaN(pX) ? 0 : pX, toY: isNaN(pZ) ? 0 : pZ });
+        const uid = named.pUID;
+        const duration = named.duration;
+        const toX = isNaN(named.pX) ? 0 : named.pX;
+        const toY = isNaN(named.pZ) ? 0 : named.pZ; // use pZ for vertical in preview
+        if (!uid || isNaN(duration) || duration <= 0) continue;
+        steps.push({ uid, duration, toX, toY });
       }
     }
     return steps;
   }
 
-  // Build the full sequence with from/to positions per object
-  function buildSequence(steps) {
-    const lastPos = {}; // uid -> { x, y }
-    return steps.map(s => {
+  // Resolve from/to positions per object, keep wait gaps as-is
+  function buildSequence(rawSteps) {
+    const lastPos = {};
+    return rawSteps.map(s => {
+      if (s._wait) return { _wait: true, duration: s.duration };
       const from = lastPos[s.uid] || { x: 0, y: 0 };
       const step = { uid: s.uid, duration: s.duration, fromX: from.x, fromY: from.y, toX: s.toX, toY: s.toY };
       lastPos[s.uid] = { x: s.toX, y: s.toY };
@@ -643,58 +648,43 @@ require(['vs/editor/editor.main'], function () {
 
   function rebuildTweens() {
     stopAnim();
-    tweenSequence = buildSequence(parseTweens());
+    tweenSequence = buildSequence(parseRawSteps());
     drawStatic();
   }
 
-  // Map world coords to canvas coords
-  // X = horizontal (right), Y = vertical (up in world = up on canvas)
-  function worldToCanvas(wx, wy, bounds, w, h) {
-    const pad = 24;
-    const scaleX = (w - pad*2) / (bounds.maxX - bounds.minX || 1);
-    const scaleY = (h - pad*2) / (bounds.maxY - bounds.minY || 1);
-    const scale = Math.min(scaleX, scaleY);
-    const cx = w/2 + (wx - (bounds.minX + bounds.maxX)/2) * scale;
-    const cy = h/2 - (wy - (bounds.minY + bounds.maxY)/2) * scale; // invert Y
-    return { x: cx, y: cy };
+  // Colour per uid
+  const uidColors = {};
+  const palette = ['#61afef','#e5c07b','#98c379','#e06c75','#c678dd','#56b6c2','#d19a66'];
+  let colorIdx = 0;
+  function colorFor(uid) {
+    if (!uidColors[uid]) uidColors[uid] = palette[colorIdx++ % palette.length];
+    return uidColors[uid];
   }
 
   function getBounds(seq) {
     const real = seq.filter(s => !s._wait);
-    if (!real.length) return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    if (!real.length) return { minX: -5, maxX: 5, minY: -5, maxY: 5 };
     const xs = real.flatMap(s => [s.fromX, s.toX]);
     const ys = real.flatMap(s => [s.fromY, s.toY]);
     let minX = Math.min(...xs), maxX = Math.max(...xs);
     let minY = Math.min(...ys), maxY = Math.max(...ys);
-    // ensure some range so single-point doesn't collapse
     if (maxX - minX < 2) { minX -= 1; maxX += 1; }
     if (maxY - minY < 2) { minY -= 1; maxY += 1; }
     return { minX, maxX, minY, maxY };
   }
 
-  // Assign a stable colour per UID
-  const uidColors = {};
-  const palette = ['#61afef','#e5c07b','#98c379','#e06c75','#c678dd','#56b6c2','#d19a66'];
-  let colorIdx = 0;
-  function colorFor(uid) {
-    if (!uidColors[uid]) { uidColors[uid] = palette[colorIdx++ % palette.length]; }
-    return uidColors[uid];
+  function worldToCanvas(wx, wy, bounds, w, h) {
+    const pad = 20;
+    const rangeX = bounds.maxX - bounds.minX;
+    const rangeY = bounds.maxY - bounds.minY;
+    const scale = Math.min((w - pad*2) / rangeX, (h - pad*2) / rangeY);
+    const cx = w/2 + (wx - (bounds.minX + bounds.maxX)/2) * scale;
+    const cy = h/2 - (wy - (bounds.minY + bounds.maxY)/2) * scale;
+    return { x: cx, y: cy };
   }
 
-  function drawStatic() {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    if (!tweenSequence.length) {
-      statusEl.textContent = 'no tweens found';
-      return;
-    }
-    statusEl.textContent = '';
-
-    const bounds = getBounds(tweenSequence);
-
-    // Draw path lines and waypoints
-    tweenSequence.forEach(s => {
+  function drawPaths(seq, bounds, w, h, alpha) {
+    seq.forEach(s => {
       if (s._wait) return;
       const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
       const to   = worldToCanvas(s.toX,   s.toY,   bounds, w, h);
@@ -703,32 +693,52 @@ require(['vs/editor/editor.main'], function () {
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
-      ctx.strokeStyle = col + '55';
+      ctx.strokeStyle = col + (alpha < 1 ? '22' : '55');
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // arrow head
+      // arrow
       const angle = Math.atan2(to.y - from.y, to.x - from.x);
       ctx.beginPath();
       ctx.moveTo(to.x, to.y);
       ctx.lineTo(to.x - 7*Math.cos(angle-0.4), to.y - 7*Math.sin(angle-0.4));
       ctx.lineTo(to.x - 7*Math.cos(angle+0.4), to.y - 7*Math.sin(angle+0.4));
       ctx.closePath();
-      ctx.fillStyle = col + '88';
+      ctx.fillStyle = col + (alpha < 1 ? '22' : '88');
       ctx.fill();
 
-      // destination dot
+      // dest dot
       ctx.beginPath();
       ctx.arc(to.x, to.y, 3, 0, Math.PI*2);
-      ctx.fillStyle = col;
+      ctx.fillStyle = col + (alpha < 1 ? '44' : 'ff');
       ctx.fill();
     });
+  }
 
-    // Draw starting positions per uid
+  function drawAxisLabels(w, h) {
+    ctx.fillStyle = '#333';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('X →', w - 26, h - 6);
+    ctx.fillText('Z ↑', 4, 12);
+  }
+
+  function drawStatic() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const real = tweenSequence.filter(s => !s._wait);
+    if (!real.length) { statusEl.textContent = 'no tweens found'; return; }
+    statusEl.textContent = '';
+
+    const bounds = getBounds(tweenSequence);
+    drawPaths(tweenSequence, bounds, w, h, 1);
+
+    // starting circles
     const starts = {};
-    tweenSequence.forEach(s => { if (!starts[s.uid]) starts[s.uid] = { x: s.fromX, y: s.fromY }; });
+    real.forEach(s => { if (!starts[s.uid]) starts[s.uid] = { x: s.fromX, y: s.fromY }; });
     Object.entries(starts).forEach(([uid, pos]) => {
       const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
       const col = colorFor(uid);
@@ -741,89 +751,71 @@ require(['vs/editor/editor.main'], function () {
       ctx.stroke();
     });
 
-    // axis labels
-    ctx.fillStyle = '#333';
-    ctx.font = '10px Consolas, monospace';
-    ctx.fillText('X →', w - 22, h - 6);
-    ctx.fillText('Y ↑', 4, 12);
+    drawAxisLabels(w, h);
   }
 
-  // During animation: given elapsed time, compute current position of each uid
   function drawAnimFrame(elapsed) {
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    if (!tweenSequence.length) return;
+    const real = tweenSequence.filter(s => !s._wait);
+    if (!real.length) return;
+
     const bounds = getBounds(tweenSequence);
+    drawPaths(tweenSequence, bounds, w, h, 0); // faint paths
 
-    // Draw static paths faintly
-    tweenSequence.forEach(s => {
-      const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
-      const to   = worldToCanvas(s.toX,   s.toY,   bounds, w, h);
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.strokeStyle = colorFor(s.uid) + '22';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    });
-
-    // Figure out total duration for progress bar
     const totalDur = tweenSequence.reduce((a, s) => a + s.duration, 0);
 
-    // Current positions: run through sequence accumulating time
-    const currentPos = {}; // uid -> { x, y }
+    // Walk through sequence to find each uid's current position
+    const currentPos = {};
     let t = 0;
     tweenSequence.forEach(s => {
-      const start = t, end = t + s.duration;
-      if (elapsed >= end) {
-        currentPos[s.uid] = { x: s.toX, y: s.toY };
-      } else if (elapsed >= start) {
-        const frac = easeInOut((elapsed - start) / s.duration);
-        currentPos[s.uid] = {
-          x: s.fromX + (s.toX - s.fromX) * frac,
-          y: s.fromY + (s.toY - s.fromY) * frac,
-        };
-      } else if (!currentPos[s.uid]) {
-        currentPos[s.uid] = { x: s.fromX, y: s.fromY };
+      const segStart = t;
+      const segEnd = t + s.duration;
+      if (!s._wait) {
+        if (elapsed >= segEnd) {
+          // finished this segment
+          currentPos[s.uid] = { x: s.toX, y: s.toY };
+        } else if (elapsed >= segStart) {
+          // currently in this segment
+          const frac = easeInOut((elapsed - segStart) / s.duration);
+          currentPos[s.uid] = {
+            x: s.fromX + (s.toX - s.fromX) * frac,
+            y: s.fromY + (s.toY - s.fromY) * frac,
+          };
+        } else if (!currentPos[s.uid]) {
+          // hasn't started yet — show at start position
+          currentPos[s.uid] = { x: s.fromX, y: s.fromY };
+        }
       }
-      t = end;
+      t = segEnd;
     });
 
-    // Draw objects
+    // Draw each object as a coloured box
     Object.entries(currentPos).forEach(([uid, pos]) => {
       const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
       const col = colorFor(uid);
-      const boxSize = 12;
+      const bs = 12;
       ctx.fillStyle = col + '33';
       ctx.strokeStyle = col;
       ctx.lineWidth = 1.5;
-      ctx.fillRect(p.x - boxSize/2, p.y - boxSize/2, boxSize, boxSize);
-      ctx.strokeRect(p.x - boxSize/2, p.y - boxSize/2, boxSize, boxSize);
+      ctx.fillRect(p.x - bs/2, p.y - bs/2, bs, bs);
+      ctx.strokeRect(p.x - bs/2, p.y - bs/2, bs, bs);
     });
 
     // Progress bar
     const barX = 12, barY = h - 10, barW = w - 24;
     ctx.fillStyle = '#1e1e1e';
     ctx.fillRect(barX, barY, barW, 3);
-    const prog = Math.min(elapsed / totalDur, 1);
     ctx.fillStyle = '#378add';
-    ctx.fillRect(barX, barY, barW * prog, 3);
+    ctx.fillRect(barX, barY, barW * Math.min(elapsed / totalDur, 1), 3);
 
-    // time label
     ctx.fillStyle = '#555';
     ctx.font = '10px Consolas, monospace';
     ctx.textAlign = 'right';
     ctx.fillText(`${elapsed.toFixed(1)}s / ${totalDur.toFixed(1)}s`, w - 12, barY - 3);
-    ctx.textAlign = 'left';
 
-    // axis labels
-    ctx.fillStyle = '#333';
-    ctx.font = '10px Consolas, monospace';
-    ctx.fillText('X →', w - 22, h - 14);
-    ctx.fillText('Y ↑', 4, 12);
+    drawAxisLabels(w, h);
   }
 
   function animLoop() {
@@ -841,7 +833,7 @@ require(['vs/editor/editor.main'], function () {
   }
 
   function startAnim() {
-    if (!tweenSequence.length) return;
+    if (!tweenSequence.filter(s => !s._wait).length) return;
     cancelAnimationFrame(animFrame);
     animating = true;
     animStartTime = Date.now();
@@ -853,13 +845,16 @@ require(['vs/editor/editor.main'], function () {
     cancelAnimationFrame(animFrame);
     animating = false;
     document.getElementById('btn-play').textContent = 'play';
-    drawStatic();
   }
 
   document.getElementById('btn-play').addEventListener('click', () => {
-    if (animating) stopAnim(); else startAnim();
+    if (animating) stopAnim();
+    else startAnim();
   });
-  document.getElementById('btn-stop').addEventListener('click', stopAnim);
+  document.getElementById('btn-stop').addEventListener('click', () => {
+    stopAnim();
+    drawStatic();
+  });
 
   function resizeCanvas() {
     const wrap = document.getElementById('tween-canvas-wrap');
