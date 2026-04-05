@@ -186,15 +186,17 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    const trimmed = line.trimStart();
-    const leadingSpaces = line.length - trimmed.length;
+    // Normalise: replace tabs with spaces, collapse multiple spaces
+    const normalised = line.replace(/\t/g, ' ').replace(/ +/g, ' ').trimStart();
+    const leadingSpaces = line.length - line.trimStart().length;
     const tokens = [];
     let i = 0;
-    while (i < trimmed.length) {
-      if (trimmed[i] === ' ') { i++; continue; }
+    while (i < normalised.length) {
+      if (normalised[i] === ' ') { i++; continue; }
       const start = i;
-      while (i < trimmed.length && trimmed[i] !== ' ') i++;
-      tokens.push({ value: trimmed.slice(start, i), col: leadingSpaces + start + 1 });
+      while (i < normalised.length && normalised[i] !== ' ') i++;
+      // col is approximate after normalisation — use token index for param mapping
+      tokens.push({ value: normalised.slice(start, i), col: leadingSpaces + start + 1 });
     }
     return tokens;
   }
@@ -783,27 +785,28 @@ require(['vs/editor/editor.main'], function () {
     tweenSequence.forEach(s => {
       const segStart = t;
       const segEnd = t + s.duration;
-      t = segEnd;
-      if (s._wait) return; // wait just advances t, positions stay frozen
-      if (elapsed < segStart) {
-        // This segment hasn't started yet. Seed position from fromX/fromY
-        // so the object appears at its correct pre-tween location.
-        if (!currentPos[s.uid]) {
-          currentPos[s.uid] = s._noFrom ? { x: s.toX, y: s.toY } : { x: s.fromX, y: s.fromY };
-        }
+      if (s._wait) {
+        // Wait: just advance time, all positions stay frozen
+        t = segEnd;
         return;
       }
+      // Seed pre-start position so object exists before its first tween fires
+      if (!currentPos[s.uid]) {
+        currentPos[s.uid] = s._noFrom ? { x: s.toX, y: s.toY } : { x: s.fromX, y: s.fromY };
+      }
       if (elapsed >= segEnd) {
-        // Segment fully complete — snap to destination.
+        // Fully complete — snap to destination
         currentPos[s.uid] = { x: s.toX, y: s.toY };
-      } else {
-        // Currently animating this segment.
+      } else if (elapsed >= segStart) {
+        // Currently animating
         const frac = easeInOut((elapsed - segStart) / s.duration);
         currentPos[s.uid] = {
           x: s.fromX + (s.toX - s.fromX) * frac,
           y: s.fromY + (s.toY - s.fromY) * frac,
         };
       }
+      // Always advance t after processing the segment
+      t = segEnd;
     });
 
     // Draw each object as a coloured box
