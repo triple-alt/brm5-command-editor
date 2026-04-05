@@ -597,72 +597,21 @@ require(['vs/editor/editor.main'], function () {
   });
 
   // ── Tween Preview ────────────────────────────────────────────────
+  // Approach: build a flat timeline of keyframes per UID up front.
+  // Each UID gets an array of { t, x, y } keyframes in absolute time.
+  // Sampling at any elapsed time is then trivial — no per-frame logic needed.
 
   const canvas = document.getElementById('tween-canvas');
   const ctx = canvas.getContext('2d');
   const statusEl = document.getElementById('tween-status');
 
-  // Each entry in tweenSequence is either:
-  //   { _wait: true, duration }
-  //   { uid, duration, fromX, fromY, toX, toY }
-  // X = pX (left/right), Y = pZ (front/back shown as up/down)
-  let tweenSequence = [];
+  let timeline = {};     // uid -> [{ t, x, y }, ...]  sorted by t
+  let totalDur  = 0;
+  let elapsed   = 0;     // current playhead position in seconds
   let animFrame = null;
   let animating = false;
-  let animStartTime = null;
+  let lastTick  = null;  // Date.now() of last rAF tick, for delta-time pause/resume
 
-  function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
-
-  // Read editor, return flat list of raw steps (tween or wait)
-  function parseRawSteps() {
-    const model = editor.getModel();
-    const steps = [];
-    for (let ln = 1; ln <= model.getLineCount(); ln++) {
-      const line = model.getLineContent(ln);
-      const named = extractNamedArgs(line);
-      if (!named) continue;
-      if (named._cmd === 'wait') {
-        const dur = named.duration;
-        if (!isNaN(dur) && dur > 0) steps.push({ _wait: true, duration: dur });
-      } else if (named._cmd === 'tween') {
-        const uid = named.pUID;
-        const duration = named.duration;
-        const toX = isNaN(named.pX) ? 0 : named.pX;
-        const toY = isNaN(named.pZ) ? 0 : named.pZ; // use pZ for vertical in preview
-        if (!uid || isNaN(duration) || duration <= 0) continue;
-        steps.push({ uid, duration, toX, toY });
-      }
-    }
-    return steps;
-  }
-
-  // Resolve from/to positions per object, keep wait gaps as-is.
-  // For the very first tween of each uid we have no known starting position,
-  // so we mark it with _noFrom=true and skip drawing its origin line.
-  function buildSequence(rawSteps) {
-    const lastPos = {};
-    return rawSteps.map(s => {
-      if (s._wait) return { _wait: true, duration: s.duration };
-      const known = lastPos[s.uid];
-      const from = known || { x: s.toX, y: s.toY }; // fallback same as dest so no phantom line
-      const step = {
-        uid: s.uid, duration: s.duration,
-        fromX: from.x, fromY: from.y,
-        toX: s.toX, toY: s.toY,
-        _noFrom: !known, // true when this is the first tween for this uid
-      };
-      lastPos[s.uid] = { x: s.toX, y: s.toY };
-      return step;
-    });
-  }
-
-  function rebuildTweens() {
-    stopAnim();
-    tweenSequence = buildSequence(parseRawSteps());
-    drawStatic();
-  }
-
-  // Colour per uid
   const uidColors = {};
   const palette = ['#61afef','#e5c07b','#98c379','#e06c75','#c678dd','#56b6c2','#d19a66'];
   let colorIdx = 0;
@@ -671,13 +620,86 @@ require(['vs/editor/editor.main'], function () {
     return uidColors[uid];
   }
 
-  function getBounds(seq) {
-    const real = seq.filter(s => !s._wait);
-    if (!real.length) return { minX: -5, maxX: 5, minY: -5, maxY: 5 };
-    const xs = real.flatMap(s => [s.fromX, s.toX]);
-    const ys = real.flatMap(s => [s.fromY, s.toY]);
-    let minX = Math.min(...xs), maxX = Math.max(...xs);
-    let minY = Math.min(...ys), maxY = Math.max(...ys);
+  function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  // Build timeline from editor content.
+  // Walks lines in order. Maintains a global clock that advances by
+  // tween duration OR wait duration. Tweens add two keyframes per uid:
+  // one at segStart (from position) and one at segEnd (to position).
+  // Waits just advance the clock — no keyframes added.
+  function buildTimeline() {
+    const model = editor.getModel();
+    let clock = 0;
+    const kf = {}; // uid -> keyframes array
+    const lastPos = {}; // uid -> { x, y } last known position
+
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const named = extractNamedArgs(model.getLineContent(ln));
+      if (!named) continue;
+
+      if (named._cmd === 'wait') {
+        const dur = named.duration;
+        if (!isNaN(dur) && dur > 0) clock += dur;
+
+      } else if (named._cmd === 'tween') {
+        const uid = named.pUID;
+        const dur  = named.duration;
+        const toX  = isNaN(named.pX) ? 0 : named.pX;
+        const toY  = isNaN(named.pZ) ? 0 : named.pZ;
+        if (!uid || isNaN(dur) || dur <= 0) continue;
+
+        if (!kf[uid]) kf[uid] = [];
+
+        const fromPos = lastPos[uid] || null;
+        const segStart = clock;
+        const segEnd   = clock + dur;
+
+        if (fromPos) {
+          // Add a keyframe at the start of this tween (from position)
+          // only if the last keyframe for this uid isn't already at this time
+          const last = kf[uid][kf[uid].length - 1];
+          if (!last || last.t < segStart) {
+            kf[uid].push({ t: segStart, x: fromPos.x, y: fromPos.y });
+          }
+        }
+        // Add destination keyframe
+        kf[uid].push({ t: segEnd, x: toX, y: toY });
+
+        lastPos[uid] = { x: toX, y: toY };
+        clock = segEnd;
+      }
+    }
+
+    return { kf, totalDur: clock };
+  }
+
+  // Sample a uid's position at time t using its keyframes
+  function samplePos(kfs, t) {
+    if (!kfs || kfs.length === 0) return null;
+    if (t <= kfs[0].t) return { x: kfs[0].x, y: kfs[0].y };
+    if (t >= kfs[kfs.length - 1].t) {
+      const last = kfs[kfs.length - 1];
+      return { x: last.x, y: last.y };
+    }
+    // Find the segment containing t
+    for (let i = 0; i < kfs.length - 1; i++) {
+      const a = kfs[i], b = kfs[i + 1];
+      if (t >= a.t && t <= b.t) {
+        const frac = easeInOut((t - a.t) / (b.t - a.t));
+        return { x: a.x + (b.x - a.x) * frac, y: a.y + (b.y - a.y) * frac };
+      }
+    }
+    return null;
+  }
+
+  function getBounds(kf) {
+    const all = Object.values(kf).flat();
+    if (!all.length) return { minX: -5, maxX: 5, minY: -5, maxY: 5 };
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    all.forEach(k => {
+      minX = Math.min(minX, k.x); maxX = Math.max(maxX, k.x);
+      minY = Math.min(minY, k.y); maxY = Math.max(maxY, k.y);
+    });
     if (maxX - minX < 2) { minX -= 1; maxX += 1; }
     if (maxY - minY < 2) { minY -= 1; maxY += 1; }
     return { minX, maxX, minY, maxY };
@@ -693,40 +715,6 @@ require(['vs/editor/editor.main'], function () {
     return { x: cx, y: cy };
   }
 
-  function drawPaths(seq, bounds, w, h, alpha) {
-    seq.forEach(s => {
-      if (s._wait) return;
-      const to  = worldToCanvas(s.toX, s.toY, bounds, w, h);
-      const col = colorFor(s.uid);
-      const faint = alpha < 1;
-      // only draw a line if this isn't the first-ever tween for this uid
-      if (!s._noFrom) {
-        const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.strokeStyle = col + (faint ? '22' : '55');
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        const angle = Math.atan2(to.y - from.y, to.x - from.x);
-        ctx.beginPath();
-        ctx.moveTo(to.x, to.y);
-        ctx.lineTo(to.x - 7*Math.cos(angle-0.4), to.y - 7*Math.sin(angle-0.4));
-        ctx.lineTo(to.x - 7*Math.cos(angle+0.4), to.y - 7*Math.sin(angle+0.4));
-        ctx.closePath();
-        ctx.fillStyle = col + (faint ? '22' : '88');
-        ctx.fill();
-      }
-      // destination dot always shown
-      ctx.beginPath();
-      ctx.arc(to.x, to.y, 3, 0, Math.PI*2);
-      ctx.fillStyle = col + (faint ? '44' : 'ff');
-      ctx.fill();
-    });
-  }
-
   function drawAxisLabels(w, h) {
     ctx.fillStyle = '#333';
     ctx.font = '10px Consolas, monospace';
@@ -735,86 +723,59 @@ require(['vs/editor/editor.main'], function () {
     ctx.fillText('Z ↑', 4, 12);
   }
 
-  function drawStatic() {
+  function drawFrame(t) {
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    const real = tweenSequence.filter(s => !s._wait);
-    if (!real.length) { statusEl.textContent = 'no tweens found'; return; }
+    const uids = Object.keys(timeline);
+    if (!uids.length) { statusEl.textContent = 'no tweens found'; return; }
     statusEl.textContent = '';
 
-    const bounds = getBounds(tweenSequence);
-    drawPaths(tweenSequence, bounds, w, h, 1);
+    const bounds = getBounds(timeline);
 
-    // starting circles
-    const starts = {};
-    real.forEach(s => { if (!starts[s.uid]) starts[s.uid] = { x: s.fromX, y: s.fromY }; });
-    Object.entries(starts).forEach(([uid, pos]) => {
-      const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
+    // Draw paths (faint dashed lines between consecutive keyframes per uid)
+    uids.forEach(uid => {
+      const kfs = timeline[uid];
       const col = colorFor(uid);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
-      ctx.fillStyle = col + '44';
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.5;
-      ctx.fill();
-      ctx.stroke();
+      for (let i = 0; i < kfs.length - 1; i++) {
+        const a = worldToCanvas(kfs[i].x,   kfs[i].y,   bounds, w, h);
+        const b = worldToCanvas(kfs[i+1].x, kfs[i+1].y, bounds, w, h);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = col + '33';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // arrow
+        const angle = Math.atan2(b.y - a.y, b.x - a.x);
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - 7*Math.cos(angle-0.4), b.y - 7*Math.sin(angle-0.4));
+        ctx.lineTo(b.x - 7*Math.cos(angle+0.4), b.y - 7*Math.sin(angle+0.4));
+        ctx.closePath();
+        ctx.fillStyle = col + '44';
+        ctx.fill();
+      }
+      // destination dots
+      kfs.forEach(k => {
+        const p = worldToCanvas(k.x, k.y, bounds, w, h);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+        ctx.fillStyle = col + '88';
+        ctx.fill();
+      });
     });
 
-    drawAxisLabels(w, h);
-  }
-
-  function drawAnimFrame(elapsed) {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    const real = tweenSequence.filter(s => !s._wait);
-    if (!real.length) return;
-
-    const bounds = getBounds(tweenSequence);
-    drawPaths(tweenSequence, bounds, w, h, 0); // faint paths
-
-    const totalDur = tweenSequence.reduce((a, s) => a + s.duration, 0);
-
-    // Walk through sequence to find each uid's current position.
-    // We walk the full sequence in order. For each segment we only
-    // update currentPos when elapsed has actually reached that segment —
-    // this ensures waits hold the previous position and don't pre-advance.
-    const currentPos = {};
-    let t = 0;
-    tweenSequence.forEach(s => {
-      const segStart = t;
-      const segEnd = t + s.duration;
-      if (s._wait) {
-        // Wait: just advance time, all positions stay frozen
-        t = segEnd;
-        return;
-      }
-      // Seed pre-start position so object exists before its first tween fires
-      if (!currentPos[s.uid]) {
-        currentPos[s.uid] = s._noFrom ? { x: s.toX, y: s.toY } : { x: s.fromX, y: s.fromY };
-      }
-      if (elapsed >= segEnd) {
-        // Fully complete — snap to destination
-        currentPos[s.uid] = { x: s.toX, y: s.toY };
-      } else if (elapsed >= segStart) {
-        // Currently animating
-        const frac = easeInOut((elapsed - segStart) / s.duration);
-        currentPos[s.uid] = {
-          x: s.fromX + (s.toX - s.fromX) * frac,
-          y: s.fromY + (s.toY - s.fromY) * frac,
-        };
-      }
-      // Always advance t after processing the segment
-      t = segEnd;
-    });
-
-    // Draw each object as a coloured box
-    Object.entries(currentPos).forEach(([uid, pos]) => {
+    // Draw objects at current time t
+    uids.forEach(uid => {
+      const pos = samplePos(timeline[uid], t);
+      if (!pos) return;
       const p = worldToCanvas(pos.x, pos.y, bounds, w, h);
       const col = colorFor(uid);
       const bs = 12;
-      ctx.fillStyle = col + '33';
+      ctx.fillStyle = col + '44';
       ctx.strokeStyle = col;
       ctx.lineWidth = 1.5;
       ctx.fillRect(p.x - bs/2, p.y - bs/2, bs, bs);
@@ -825,66 +786,90 @@ require(['vs/editor/editor.main'], function () {
     const barX = 12, barY = h - 10, barW = w - 24;
     ctx.fillStyle = '#1e1e1e';
     ctx.fillRect(barX, barY, barW, 3);
-    ctx.fillStyle = '#378add';
-    ctx.fillRect(barX, barY, barW * Math.min(elapsed / totalDur, 1), 3);
-
-    ctx.fillStyle = '#555';
-    ctx.font = '10px Consolas, monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${elapsed.toFixed(1)}s / ${totalDur.toFixed(1)}s`, w - 12, barY - 3);
+    if (totalDur > 0) {
+      ctx.fillStyle = '#378add';
+      ctx.fillRect(barX, barY, barW * Math.min(t / totalDur, 1), 3);
+      ctx.fillStyle = '#555';
+      ctx.font = '10px Consolas, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${t.toFixed(1)}s / ${totalDur.toFixed(1)}s`, w - 12, barY - 3);
+    }
 
     drawAxisLabels(w, h);
   }
 
   function animLoop() {
     if (!animating) return;
-    const elapsed = (Date.now() - animStartTime) / 1000;
-    const totalDur = tweenSequence.reduce((a, s) => a + s.duration, 0);
-    drawAnimFrame(Math.min(elapsed, totalDur));
+    const now = Date.now();
+    const delta = (now - lastTick) / 1000;
+    lastTick = now;
+    elapsed = Math.min(elapsed + delta, totalDur);
+    drawFrame(elapsed);
     if (elapsed < totalDur) {
       animFrame = requestAnimationFrame(animLoop);
     } else {
       animating = false;
       document.getElementById('btn-play').textContent = 'play';
-      drawStatic();
     }
   }
 
   function startAnim() {
-    if (!tweenSequence.filter(s => !s._wait).length) return;
+    if (!Object.keys(timeline).length) return;
     cancelAnimationFrame(animFrame);
     animating = true;
-    animStartTime = Date.now();
+    lastTick = Date.now();
     document.getElementById('btn-play').textContent = 'pause';
     animLoop();
   }
 
-  function stopAnim() {
+  function pauseAnim() {
     cancelAnimationFrame(animFrame);
     animating = false;
     document.getElementById('btn-play').textContent = 'play';
   }
 
+  function stopAnim() {
+    cancelAnimationFrame(animFrame);
+    animating = false;
+    elapsed = 0;
+    document.getElementById('btn-play').textContent = 'play';
+    drawFrame(0);
+  }
+
+  function rebuildTweens() {
+    const wasAnimating = animating;
+    pauseAnim();
+    const built = buildTimeline();
+    timeline = built.kf;
+    totalDur = built.totalDur;
+    // reset playhead only if content changed enough to invalidate it
+    if (elapsed > totalDur) elapsed = 0;
+    drawFrame(elapsed);
+    if (wasAnimating && Object.keys(timeline).length) startAnim();
+  }
+
   document.getElementById('btn-play').addEventListener('click', () => {
-    if (animating) stopAnim();
-    else startAnim();
+    if (animating) pauseAnim();
+    else {
+      if (elapsed >= totalDur) elapsed = 0; // restart from beginning if finished
+      startAnim();
+    }
   });
-  document.getElementById('btn-stop').addEventListener('click', () => {
-    stopAnim();
-    drawStatic();
-  });
+  document.getElementById('btn-stop').addEventListener('click', stopAnim);
 
   function resizeCanvas() {
     const wrap = document.getElementById('tween-canvas-wrap');
     canvas.width = wrap.clientWidth;
     canvas.height = wrap.clientHeight;
-    if (!animating) drawStatic();
+    drawFrame(elapsed);
   }
 
   new ResizeObserver(resizeCanvas).observe(document.getElementById('tween-canvas-wrap'));
   resizeCanvas();
   rebuildTweens();
+
 });
+</script>
 </script>
 </body>
 </html>
