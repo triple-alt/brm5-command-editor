@@ -630,8 +630,8 @@ require(['vs/editor/editor.main'], function () {
   function buildTimeline() {
     const model = editor.getModel();
     let clock = 0;
-    const kf = {}; // uid -> keyframes array
-    const lastPos = {}; // uid -> { x, y } last known position
+    const kf = {};      // uid -> keyframes array { t, x, y }
+    const lastPos = {}; // uid -> { x, y } last committed position
 
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const named = extractNamedArgs(model.getLineContent(ln));
@@ -643,26 +643,31 @@ require(['vs/editor/editor.main'], function () {
 
       } else if (named._cmd === 'tween') {
         const uid = named.pUID;
-        const dur  = named.duration;
-        const toX  = isNaN(named.pX) ? 0 : named.pX;
-        const toY  = isNaN(named.pZ) ? 0 : named.pZ;
+        const dur = named.duration;
+        const toX = isNaN(named.pX) ? 0 : named.pX;
+        const toY = isNaN(named.pZ) ? 0 : named.pZ;
         if (!uid || isNaN(dur) || dur <= 0) continue;
 
         if (!kf[uid]) kf[uid] = [];
 
-        const fromPos = lastPos[uid] || null;
         const segStart = clock;
         const segEnd   = clock + dur;
+        const fromPos  = lastPos[uid];
 
         if (fromPos) {
-          // Add a keyframe at the start of this tween (from position)
-          // only if the last keyframe for this uid isn't already at this time
+          // Insert a "hold" keyframe at segStart using last known position,
+          // but only if there isn't already a keyframe at this exact time.
           const last = kf[uid][kf[uid].length - 1];
           if (!last || last.t < segStart) {
             kf[uid].push({ t: segStart, x: fromPos.x, y: fromPos.y });
           }
+        } else {
+          // First tween for this uid — seed at t=0 at the destination
+          // (no prior position known) so the object exists from the start.
+          kf[uid].push({ t: 0, x: toX, y: toY });
         }
-        // Add destination keyframe
+
+        // Destination keyframe at end of tween
         kf[uid].push({ t: segEnd, x: toX, y: toY });
 
         lastPos[uid] = { x: toX, y: toY };
@@ -869,7 +874,6 @@ require(['vs/editor/editor.main'], function () {
   rebuildTweens();
 
 });
-</script>
 </script>
 </body>
 </html>
