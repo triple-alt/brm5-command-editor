@@ -634,13 +634,21 @@ require(['vs/editor/editor.main'], function () {
     return steps;
   }
 
-  // Resolve from/to positions per object, keep wait gaps as-is
+  // Resolve from/to positions per object, keep wait gaps as-is.
+  // For the very first tween of each uid we have no known starting position,
+  // so we mark it with _noFrom=true and skip drawing its origin line.
   function buildSequence(rawSteps) {
     const lastPos = {};
     return rawSteps.map(s => {
       if (s._wait) return { _wait: true, duration: s.duration };
-      const from = lastPos[s.uid] || { x: 0, y: 0 };
-      const step = { uid: s.uid, duration: s.duration, fromX: from.x, fromY: from.y, toX: s.toX, toY: s.toY };
+      const known = lastPos[s.uid];
+      const from = known || { x: s.toX, y: s.toY }; // fallback same as dest so no phantom line
+      const step = {
+        uid: s.uid, duration: s.duration,
+        fromX: from.x, fromY: from.y,
+        toX: s.toX, toY: s.toY,
+        _noFrom: !known, // true when this is the first tween for this uid
+      };
       lastPos[s.uid] = { x: s.toX, y: s.toY };
       return step;
     });
@@ -686,33 +694,33 @@ require(['vs/editor/editor.main'], function () {
   function drawPaths(seq, bounds, w, h, alpha) {
     seq.forEach(s => {
       if (s._wait) return;
-      const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
-      const to   = worldToCanvas(s.toX,   s.toY,   bounds, w, h);
-      const col  = colorFor(s.uid);
-
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.strokeStyle = col + (alpha < 1 ? '22' : '55');
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // arrow
-      const angle = Math.atan2(to.y - from.y, to.x - from.x);
-      ctx.beginPath();
-      ctx.moveTo(to.x, to.y);
-      ctx.lineTo(to.x - 7*Math.cos(angle-0.4), to.y - 7*Math.sin(angle-0.4));
-      ctx.lineTo(to.x - 7*Math.cos(angle+0.4), to.y - 7*Math.sin(angle+0.4));
-      ctx.closePath();
-      ctx.fillStyle = col + (alpha < 1 ? '22' : '88');
-      ctx.fill();
-
-      // dest dot
+      const to  = worldToCanvas(s.toX, s.toY, bounds, w, h);
+      const col = colorFor(s.uid);
+      const faint = alpha < 1;
+      // only draw a line if this isn't the first-ever tween for this uid
+      if (!s._noFrom) {
+        const from = worldToCanvas(s.fromX, s.fromY, bounds, w, h);
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.strokeStyle = col + (faint ? '22' : '55');
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        ctx.beginPath();
+        ctx.moveTo(to.x, to.y);
+        ctx.lineTo(to.x - 7*Math.cos(angle-0.4), to.y - 7*Math.sin(angle-0.4));
+        ctx.lineTo(to.x - 7*Math.cos(angle+0.4), to.y - 7*Math.sin(angle+0.4));
+        ctx.closePath();
+        ctx.fillStyle = col + (faint ? '22' : '88');
+        ctx.fill();
+      }
+      // destination dot always shown
       ctx.beginPath();
       ctx.arc(to.x, to.y, 3, 0, Math.PI*2);
-      ctx.fillStyle = col + (alpha < 1 ? '44' : 'ff');
+      ctx.fillStyle = col + (faint ? '44' : 'ff');
       ctx.fill();
     });
   }
@@ -784,8 +792,8 @@ require(['vs/editor/editor.main'], function () {
             y: s.fromY + (s.toY - s.fromY) * frac,
           };
         } else if (!currentPos[s.uid]) {
-          // hasn't started yet — show at start position
-          currentPos[s.uid] = { x: s.fromX, y: s.fromY };
+          // hasn't started yet — show at first known position (toX/toY if _noFrom, else fromX/fromY)
+          currentPos[s.uid] = s._noFrom ? { x: s.toX, y: s.toY } : { x: s.fromX, y: s.fromY };
         }
       }
       t = segEnd;
