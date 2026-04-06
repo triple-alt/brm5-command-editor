@@ -207,11 +207,11 @@ require(['vs/editor/editor.main'], function () {
     duplicate: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates specified part.' },
     rename: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames specified object.' },
     squad: { params: [{name:'player',type:'string'},{name:'subtype',type:'enum',values:SQUAD_TYPES}], doc: 'Sets squad to a specified player' },
-    compounds: { params:{name:'boolean',type:'enum',values:['enable','disable']},
-    revive: { params:{name:'boolean',type:'enum',values:['enable','disable']},
-    hud: { params:{name:'boolean',type:'enum',values:['enable','disable']},
-    firstperson: { params:{name:'boolean',type:'enum',values:['lock','unlock']},
-    friendlyfire: { params:{name:'boolean',type:'enum',values:['enable','disable','all']},
+    compounds:   { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables compounds.' },
+    revive:      { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables revive.' },
+    hud:         { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables the HUD.' },
+    firstperson: { params: [{name:'boolean',type:'enum',values:['lock','unlock']}], doc: 'Locks or unlocks first person.' },
+    friendlyfire: { params: [{name:'boolean',type:'enum',values:['enable','disable','all']}], doc: 'Enables or disables friendly fire.' },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
