@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor</title>
+<script>
+const CHANGELOG = [
+  {
+    version: "New Properties",
+    date: "06/04/2025",
+    changes: [
+      { type: "new",  text: "Added support for 'isButton' property." },
+      { type: "new",  text: "Added support for 'isLooping' property." },
+      { type: "change",  text: "Added this changelog" },
+    ]
+  },
+];
+</script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
@@ -39,6 +52,62 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .err-pos { color: #666; }
 .err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
+
+/* ── Changelog modal ── */
+#cl-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+#cl-overlay.open { display: flex; }
+#cl-modal {
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  font-family: Consolas, monospace;
+}
+#cl-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+#cl-title { color: #abb2bf; font-size: 13px; flex: 1; }
+#cl-close {
+  background: none; border: none; color: #666; font-size: 16px;
+  cursor: pointer; line-height: 1; padding: 0 2px;
+}
+#cl-close:hover { color: #abb2bf; }
+#cl-body { overflow-y: auto; padding: 12px 14px; }
+.cl-version-block { margin-bottom: 18px; }
+.cl-version-block:last-child { margin-bottom: 0; }
+.cl-ver-row {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;
+}
+.cl-ver { color: #61afef; font-size: 13px; font-weight: 600; }
+.cl-date { color: #4a4a4a; font-size: 11px; }
+.cl-entry {
+  display: flex; align-items: baseline; gap: 7px;
+  padding: 2px 0 2px 4px; font-size: 12px; color: #abb2bf;
+}
+.cl-tag {
+  font-size: 10px; padding: 1px 5px; border-radius: 3px;
+  flex-shrink: 0; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cl-tag.new    { background: #1a3a26; color: #4ec97a; border: 1px solid #2a5a3a; }
+.cl-tag.fix    { background: #3a2020; color: #e06c75; border: 1px solid #5a3030; }
+.cl-tag.change { background: #2a2a10; color: #e5c07b; border: 1px solid #4a4a20; }
 </style>
 </head>
 <body>
@@ -51,13 +120,58 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
         <button class="hdr-btn" id="btn-import">Import</button>
         <button class="hdr-btn" id="btn-export">Export</button>
+        <button class="hdr-btn" id="btn-changelog">Changelog</button>
         <span style="color: #666;">made with claude</span>
       </span>
     </div>
     <div id="error-list"><div id="no-errors">no errors</div></div>
   </div>
 </div>
+
+<!-- Changelog modal -->
+<div id="cl-overlay">
+  <div id="cl-modal">
+    <div id="cl-header">
+      <span id="cl-title">changelog</span>
+      <button id="cl-close" title="Close">✕</button>
+    </div>
+    <div id="cl-body"></div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
+<script>
+// Build changelog modal content from CHANGELOG config above
+(function() {
+  const body = document.getElementById('cl-body');
+  const overlay = document.getElementById('cl-overlay');
+
+  CHANGELOG.forEach(entry => {
+    const block = document.createElement('div');
+    block.className = 'cl-version-block';
+
+    const verRow = document.createElement('div');
+    verRow.className = 'cl-ver-row';
+    verRow.innerHTML = `<span class="cl-ver">${entry.version}</span><span class="cl-date">${entry.date}</span>`;
+    block.appendChild(verRow);
+
+    entry.changes.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'cl-entry';
+      const tagType = c.type || 'change';
+      row.innerHTML = `<span class="cl-tag ${tagType}">${tagType}</span><span>${c.text}</span>`;
+      block.appendChild(row);
+    });
+
+    body.appendChild(block);
+  });
+
+  document.getElementById('btn-changelog').addEventListener('click', () => overlay.classList.add('open'));
+  document.getElementById('cl-close').addEventListener('click', () => overlay.classList.remove('open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.classList.remove('open'); });
+})();
+</script>
 <script>
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' } });
 require(['vs/editor/editor.main'], function () {
