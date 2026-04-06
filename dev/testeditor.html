@@ -5,16 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor</title>
 <script>
-const CHANGELOG = [
-  {
-    version: "New Properties",
-    date: "06/04/2025",
-    changes: [
-      { type: "new",  text: "Added support for 'isButton' property." },
-      { type: "new",  text: "Added support for 'isLooping' property." },
-      { type: "change",  text: "Added this changelog" },
-    ]
-  },
+const CHANGELOG = [   {     
+  version: "New Properties",     
+  date: "06/04/2025",     
+  changes: [       
+    { type: "new",  text: "Added support for 'isButton' property." },       
+    { type: "new",  text: "Added support for 'isLooping' property." },  
+    { type: "new",  text: "Pasted coordinates with commas get commas automatically removed." },
+    { type: "new",  text: "Added the rest of the commands (hopefully all?)" },  
+    { type: "change",  text: "Added this changelog" },    
+  ]   
+}, 
 ];
 </script>
 <style>
@@ -188,6 +189,7 @@ require(['vs/editor/editor.main'], function () {
   const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','savemodel','deletemodel','insertmodel'];
   const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
   const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','isLooping'];
+  const SQUAD_TYPES = ['none','red','blue','orange','yellow','green'];
   const MATERIALS       = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_clad10","brick_clad11","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_old2","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_tiles10","marble_tiles11","marble_tiles12","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
 
   const CMDS = {
@@ -203,6 +205,13 @@ require(['vs/editor/editor.main'], function () {
     ban:       { params: [{name:'player',type:'string'}], doc: 'Bans specified player.' },
     kick:      { params: [{name:'player',type:'string'}], doc: 'Kicks specified player.' },
     duplicate: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates specified part.' },
+    rename: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames specified object.' },
+    squad: { params: [{name:'player',type:'string'},{name:'subtype',type:'enum',values:SQUAD_TYPES}], doc: 'Sets squad to a specified player' },
+    compounds: { params:{name:'boolean',type:'enum',values:['enable','disable']},
+    revive: { params:{name:'boolean',type:'enum',values:['enable','disable']},
+    hud: { params:{name:'boolean',type:'enum',values:['enable','disable']},
+    firstperson: { params:{name:'boolean',type:'enum',values:['lock','unlock']},
+    friendlyfire: { params:{name:'boolean',type:'enum',values:['enable','disable','all']},
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
@@ -259,10 +268,13 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
       root: [
-        [/\b(create|tween|color|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|color|hud|revive|friendlyfire|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false)\b/, 'constant'],
+        [/\b(enable|disable)\b/, 'constant'],
+        [/\b(enable|disable|all)\b/, 'constant'],
+        [/\b(lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
-        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
         [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
         [/-?\d+(\.\d+)?/, 'number'],
         [/"[^"]*"/, 'string'],
@@ -620,6 +632,57 @@ require(['vs/editor/editor.main'], function () {
     suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on',
     autoClosingBrackets: 'never', autoClosingQuotes: 'never',
     inlayHints: { enabled: 'on' },
+  });
+
+  function cleanPastedLine(line) {
+    if (!line.includes(',')) return line;
+  
+    const raw = line.trimStart();
+    const indent = line.slice(0, line.length - raw.length);
+    const parts = raw.split(/\s+/);
+    if (!parts.length) return line;
+  
+    const cmdName = parts[0].toLowerCase();
+    const spec = CMDS[cmdName];
+  
+    if (!spec) {
+      return indent + parts.map(p => p.replace(/,/g, '')).join(' ');
+    }
+  
+    const cleanParts = parts.map(p => p.replace(/,/g, ''));
+    const fakeTokens = cleanParts.map((v, i) => ({ value: v, col: i + 1 }));
+    const params = resolveParams(spec, fakeTokens);
+  
+    const result = parts.map((part, i) => {
+      if (i === 0) return part;
+      const paramIdx = i - 1;
+      if (paramIdx >= params.length) return part;
+      if (params[paramIdx].type === 'number') return part.replace(/,/g, '');
+      return part;
+    });
+  
+    return indent + result.join(' ');
+  }
+
+  editor.onDidPaste((e) => {
+    const model = editor.getModel();
+    const startLine = e.range.startLineNumber;
+    const endLine   = e.range.endLineNumber;
+
+    const edits = [];
+    for (let ln = startLine; ln <= endLine; ln++) {
+      const original = model.getLineContent(ln);
+      const cleaned  = cleanPastedLine(original);
+      if (cleaned !== original) {
+        edits.push({
+          range: new monaco.Range(ln, 1, ln, original.length + 1),
+          text: cleaned,
+        });
+      }
+    }
+    if (edits.length) {
+      editor.executeEdits('paste-comma-clean', edits);
+    }
   });
 
   let debounce;
