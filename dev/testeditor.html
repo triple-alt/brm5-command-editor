@@ -152,7 +152,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 
     const verRow = document.createElement('div');
     verRow.className = 'cl-ver-row';
-    verRow.innerHTML = `<span class="cl-ver">v${entry.version}</span><span class="cl-date">${entry.date}</span>`;
+    verRow.innerHTML = `<span class="cl-ver">${entry.version}</span><span class="cl-date">${entry.date}</span>`;
     block.appendChild(verRow);
 
     entry.changes.forEach(c => {
