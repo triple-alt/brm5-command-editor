@@ -622,49 +622,34 @@ require(['vs/editor/editor.main'], function () {
     inlayHints: { enabled: 'on' },
   });
 
-  // Strip commas between numeric tokens on paste, but only where the
-  // params at those positions are number-typed (covers pX/pY/pZ/rX/rY/rZ/sX/sY/sZ etc.)
   function cleanPastedLine(line) {
-    // Only bother if there's a comma at all
     if (!line.includes(',')) return line;
-
-    const tokens = parseLine(line);
-    if (!tokens.length) return line;
-
-    const cmdName = tokens[0].value.toLowerCase();
+  
+    const raw = line.trimStart();
+    const indent = line.slice(0, line.length - raw.length);
+    const parts = raw.split(/\s+/);
+    if (!parts.length) return line;
+  
+    const cmdName = parts[0].toLowerCase();
     const spec = CMDS[cmdName];
+  
     if (!spec) {
-      // No known command — still strip commas between bare numbers anywhere in the line
-      // so pasting "1, 2, 3" mid-line still works sensibly
-      return line.replace(/(-?\d+(?:\.\d+)?)\s*,\s*/g, '$1 ');
+      return indent + parts.map(p => p.replace(/,/g, '')).join(' ');
     }
-
-    const params = resolveParams(spec, tokens);
-
-    // Build a new line character-by-character, removing commas that sit
-    // between two tokens whose param slot is type 'number'.
-    // We work on the raw string and track which inter-token gaps have commas.
-    let result = line;
-    // Iterate in reverse so replacements don't shift earlier column indices
-    for (let i = tokens.length - 1; i >= 1; i--) {
-      const cur  = tokens[i];
-      const prev = tokens[i - 1];
-      const paramIdx = i - 1; // param index for the token at position i (0 = cmd name, skip)
-      if (paramIdx < 0 || paramIdx >= params.length) continue;
-      const param = params[paramIdx];
-      if (param.type !== 'number') continue;
-
-      // Slice the gap between end of prev token and start of cur token
-      const gapStart = prev.col - 1 + prev.value.length; // 0-based
-      const gapEnd   = cur.col - 1;                       // 0-based
-      const gap = result.slice(gapStart, gapEnd);
-      if (!gap.includes(',')) continue;
-
-      // Replace comma(s) in the gap with a single space
-      const cleanedGap = gap.replace(/,/g, '').replace(/\s+/, ' ') || ' ';
-      result = result.slice(0, gapStart) + cleanedGap + result.slice(gapEnd);
-    }
-    return result;
+  
+    const cleanParts = parts.map(p => p.replace(/,/g, ''));
+    const fakeTokens = cleanParts.map((v, i) => ({ value: v, col: i + 1 }));
+    const params = resolveParams(spec, fakeTokens);
+  
+    const result = parts.map((part, i) => {
+      if (i === 0) return part;
+      const paramIdx = i - 1;
+      if (paramIdx >= params.length) return part;
+      if (params[paramIdx].type === 'number') return part.replace(/,/g, '');
+      return part;
+    });
+  
+    return indent + result.join(' ');
   }
 
   editor.onDidPaste((e) => {
