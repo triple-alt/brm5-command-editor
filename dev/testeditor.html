@@ -6,6 +6,10 @@
 <title>Editor</title>
 <script>
 const CHANGELOG = [   {     
+  version: "Added hidden commands",     
+  date: "07/04/2025",     
+  changes: [       
+    { type: "new",  text: "Added collision and teleport commands." },
   version: "New Properties",     
   date: "06/04/2025",     
   changes: [       
@@ -212,6 +216,8 @@ require(['vs/editor/editor.main'], function () {
     hud:         { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables the HUD.' },
     firstperson: { params: [{name:'boolean',type:'enum',values:['lock','unlock']}], doc: 'Locks or unlocks first person.' },
     friendlyfire: { params: [{name:'boolean',type:'enum',values:['enable','disable','all']}], doc: 'Enables or disables friendly fire.' },
+    collision: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:['0','1','2','3']}], doc: 'Changes collision attribute value.' },
+    teleport: { params: [{name:'type',type:'enum',values:['all','squad','player','other']},{name:'target',type:'string'},,{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports thing to specified location.' },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
@@ -268,7 +274,7 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
       root: [
-        [/\b(create|tween|color|hud|revive|friendlyfire|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|color|hud|revive|friendlyfire|collision|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false)\b/, 'constant'],
         [/\b(enable|disable)\b/, 'constant'],
         [/\b(enable|disable|all)\b/, 'constant'],
