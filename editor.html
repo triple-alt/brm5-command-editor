@@ -5,17 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor</title>
 <script>
-const CHANGELOG = [   {     
-  version: "New Properties",     
-  date: "06/04/2025",     
-  changes: [       
-    { type: "new",  text: "Added support for 'isButton' property." },       
-    { type: "new",  text: "Added support for 'isLooping' property." },  
-    { type: "new",  text: "Pasted coordinates with commas get commas automatically removed." },
-    { type: "new",  text: "Added the rest of the commands (hopefully all?)" },  
-    { type: "change",  text: "Added this changelog" },    
-  ]   
-}, 
+const CHANGELOG = [
+  {
+    version: "Added hidden commands",
+    date: "07/04/2025",
+    changes: [
+      { type: "new", text: "Added collision and teleport commands." },
+      { type: "new", text: "Added // comment support." },
+    ]
+  },
+  {
+    version: "New Properties",
+    date: "06/04/2025",
+    changes: [
+      { type: "new",    text: "Added support for 'isButton' property." },
+      { type: "new",    text: "Added support for 'isLooping' property." },
+      { type: "new",    text: "Pasted coordinates with commas get commas automatically removed." },
+      { type: "new",    text: "Added the rest of the commands (hopefully all?)" },
+      { type: "change", text: "Added this changelog." },
+    ]
+  },
 ];
 </script>
 <style>
@@ -56,56 +65,32 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 
 /* ── Changelog modal ── */
 #cl-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.65);
-  z-index: 9999;
-  align-items: center;
-  justify-content: center;
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65); z-index: 9999;
+  align-items: center; justify-content: center;
 }
 #cl-overlay.open { display: flex; }
 #cl-modal {
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
-  width: 480px;
-  max-width: 92vw;
-  max-height: 72vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-  font-family: Consolas, monospace;
+  background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 6px;
+  width: 480px; max-width: 92vw; max-height: 72vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6); font-family: Consolas, monospace;
 }
 #cl-header {
-  display: flex;
-  align-items: center;
-  padding: 10px 14px;
-  border-bottom: 1px solid #333;
-  flex-shrink: 0;
+  display: flex; align-items: center; padding: 10px 14px;
+  border-bottom: 1px solid #333; flex-shrink: 0;
 }
 #cl-title { color: #abb2bf; font-size: 13px; flex: 1; }
-#cl-close {
-  background: none; border: none; color: #666; font-size: 16px;
-  cursor: pointer; line-height: 1; padding: 0 2px;
-}
+#cl-close { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
 #cl-close:hover { color: #abb2bf; }
 #cl-body { overflow-y: auto; padding: 12px 14px; }
 .cl-version-block { margin-bottom: 18px; }
 .cl-version-block:last-child { margin-bottom: 0; }
-.cl-ver-row {
-  display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;
-}
+.cl-ver-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .cl-ver { color: #61afef; font-size: 13px; font-weight: 600; }
 .cl-date { color: #4a4a4a; font-size: 11px; }
-.cl-entry {
-  display: flex; align-items: baseline; gap: 7px;
-  padding: 2px 0 2px 4px; font-size: 12px; color: #abb2bf;
-}
-.cl-tag {
-  font-size: 10px; padding: 1px 5px; border-radius: 3px;
-  flex-shrink: 0; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
+.cl-entry { display: flex; align-items: baseline; gap: 7px; padding: 2px 0 2px 4px; font-size: 12px; color: #abb2bf; }
+.cl-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .cl-tag.new    { background: #1a3a26; color: #4ec97a; border: 1px solid #2a5a3a; }
 .cl-tag.fix    { background: #3a2020; color: #e06c75; border: 1px solid #5a3030; }
 .cl-tag.change { background: #2a2a10; color: #e5c07b; border: 1px solid #4a4a20; }
@@ -142,20 +127,16 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
 <script>
-// Build changelog modal content from CHANGELOG config above
 (function() {
   const body = document.getElementById('cl-body');
   const overlay = document.getElementById('cl-overlay');
-
   CHANGELOG.forEach(entry => {
     const block = document.createElement('div');
     block.className = 'cl-version-block';
-
     const verRow = document.createElement('div');
     verRow.className = 'cl-ver-row';
     verRow.innerHTML = `<span class="cl-ver">${entry.version}</span><span class="cl-date">${entry.date}</span>`;
     block.appendChild(verRow);
-
     entry.changes.forEach(c => {
       const row = document.createElement('div');
       row.className = 'cl-entry';
@@ -163,10 +144,8 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       row.innerHTML = `<span class="cl-tag ${tagType}">${tagType}</span><span>${c.text}</span>`;
       block.appendChild(row);
     });
-
     body.appendChild(block);
   });
-
   document.getElementById('btn-changelog').addEventListener('click', () => overlay.classList.add('open'));
   document.getElementById('cl-close').addEventListener('click', () => overlay.classList.remove('open'));
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
@@ -183,40 +162,47 @@ require(['vs/editor/editor.main'], function () {
   function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
 
   const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
-  const TRIGGER_SUB     = ['add','remove','color','set','activate','reset','create','delete','executable','whitelist'];
+  const TRIGGER_SUB     = ['add','addbutton','remove','color','set','activate','reset','create','delete','executable','whitelist'];
   const WORLD_SUB       = ['list','load'];
   const TIME_SUB        = ['start','stop','now','set'];
   const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','savemodel','deletemodel','insertmodel'];
   const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
   const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','isLooping'];
-  const SQUAD_TYPES = ['none','red','blue','orange','yellow','green'];
+  const SQUAD_TYPES     = ['none','red','blue','orange','yellow','green'];
+  const COLLISION_TYPES = ['0','1','2','3'];
+  const TELEPORT_TYPES  = ['all','squad','player','other'];
+  const BOOL_EN         = ['enable','disable'];
+  const BOOL_LOCK       = ['lock','unlock'];
+  const BOOL_FF         = ['enable','disable','all'];
   const MATERIALS       = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_clad10","brick_clad11","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_old2","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_tiles10","marble_tiles11","marble_tiles12","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
 
   const CMDS = {
-    create:    { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).' },
-    tween:     { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.' },
-    color:     { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0-255).' },
-    material:  { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.' },
-    reset:     { params: [], doc: 'Reset the entire scene to its default state.' },
-    explosion: { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given type.' },
-    move:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part.' },
-    size:      { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
-    wait:      { params: [{name:'duration',type:'number'}], doc: 'Waits a set duration before proceeding.' },
-    ban:       { params: [{name:'player',type:'string'}], doc: 'Bans specified player.' },
-    kick:      { params: [{name:'player',type:'string'}], doc: 'Kicks specified player.' },
-    duplicate: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates specified part.' },
-    rename: { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames specified object.' },
-    squad: { params: [{name:'player',type:'string'},{name:'subtype',type:'enum',values:SQUAD_TYPES}], doc: 'Sets squad to a specified player' },
-    compounds:   { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables compounds.' },
-    revive:      { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables revive.' },
-    hud:         { params: [{name:'boolean',type:'enum',values:['enable','disable']}], doc: 'Enables or disables the HUD.' },
-    firstperson: { params: [{name:'boolean',type:'enum',values:['lock','unlock']}], doc: 'Locks or unlocks first person.' },
-    friendlyfire: { params: [{name:'boolean',type:'enum',values:['enable','disable','all']}], doc: 'Enables or disables friendly fire.' },
+    create:      { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).' },
+    tween:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.' },
+    color:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0-255).' },
+    material:    { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.' },
+    reset:       { params: [], doc: 'Reset the entire scene to its default state.' },
+    explosion:   { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given type.' },
+    move:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part.' },
+    size:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
+    wait:        { params: [{name:'duration',type:'number'}], doc: 'Waits a set duration before proceeding.' },
+    ban:         { params: [{name:'player',type:'string'}], doc: 'Bans specified player.' },
+    kick:        { params: [{name:'player',type:'string'}], doc: 'Kicks specified player.' },
+    duplicate:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates specified part.' },
+    rename:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames specified object.' },
+    squad:       { params: [{name:'player',type:'string'},{name:'squad',type:'enum',values:SQUAD_TYPES}], doc: 'Sets squad for a specified player.' },
+    compounds:   { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables compounds.' },
+    revive:      { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables revive.' },
+    hud:         { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables the HUD.' },
+    firstperson: { params: [{name:'boolean',type:'enum',values:BOOL_LOCK}], doc: 'Locks or unlocks first person mode.' },
+    friendlyfire:{ params: [{name:'boolean',type:'enum',values:BOOL_FF}], doc: 'Enables, disables, or sets all-team friendly fire.' },
+    collision:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:COLLISION_TYPES}], doc: 'Changes collision attribute value.' },
+    teleport:    { params: [{name:'type',type:'enum',values:TELEPORT_TYPES},{name:'target',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports thing to specified location.' },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
         add:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds trigger to specified part.' },
-        addbutton:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds button interact to specified part.' },
+        addbutton:  { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds button interact to specified part.' },
         remove:     { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Removes trigger from specified part.' },
         color:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Changes trigger hitbox color.' },
         set:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Applies specified trigger to specified part.' },
@@ -268,13 +254,11 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
       root: [
-        [/\b(create|tween|color|hud|revive|friendlyfire|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
-        [/\b(true|false)\b/, 'constant'],
-        [/\b(enable|disable)\b/, 'constant'],
-        [/\b(enable|disable|all)\b/, 'constant'],
-        [/\b(lock|unlock)\b/, 'constant'],
+        [/\/\/.*$/, 'comment'],
+        [/\b(create|tween|color|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
-        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
         [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
         [/-?\d+(\.\d+)?/, 'number'],
         [/"[^"]*"/, 'string'],
@@ -284,8 +268,11 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    const trimmed = line.trimStart();
-    const leadingSpaces = line.length - trimmed.length;
+    // Strip inline comments before parsing
+    const commentIdx = line.indexOf('//');
+    const stripped = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    const trimmed = stripped.trimStart();
+    const leadingSpaces = stripped.length - trimmed.length;
     const tokens = [];
     let i = 0;
     while (i < trimmed.length) {
@@ -303,7 +290,11 @@ require(['vs/editor/editor.main'], function () {
     const tokens = parseLine(line);
     if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
     const restCol = tokens[restTokenIdx].col;
-    return [...tokens.slice(0, restTokenIdx), { value: line.slice(restCol - 1), col: restCol, isRest: true }];
+    // Strip comment from rest value too
+    const rawRest = line.slice(restCol - 1);
+    const commentIdx = rawRest.indexOf('//');
+    const restVal = commentIdx >= 0 ? rawRest.slice(0, commentIdx).trimEnd() : rawRest;
+    return [...tokens.slice(0, restTokenIdx), { value: restVal, col: restCol, isRest: true }];
   }
 
   function getTokens(line) {
@@ -423,6 +414,9 @@ require(['vs/editor/editor.main'], function () {
     provideCompletionItems(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const textBefore = line.slice(0, position.column - 1);
+      // Don't suggest inside a comment
+      const commentIdx = textBefore.indexOf('//');
+      if (commentIdx >= 0) return { suggestions: [] };
       const rawTokensBefore = parseLine(textBefore);
       const wordInfo = model.getWordUntilPosition(position);
       const range = {
@@ -464,6 +458,9 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
+      // No hover inside comments
+      const commentIdx = line.indexOf('//');
+      if (commentIdx >= 0 && position.column > commentIdx) return null;
       const tokens = getTokens(line);
       if (!tokens.length) return null;
       const word = model.getWordAtPosition(position);
@@ -566,6 +563,9 @@ require(['vs/editor/editor.main'], function () {
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
+      // Skip pure comment lines and empty lines
+      const trimmed = line.trimStart();
+      if (trimmed.startsWith('//') || trimmed === '') continue;
       const tokens = getTokens(line);
       if (!tokens.length) continue;
       const cmdName = tokens[0].value.toLowerCase();
@@ -622,9 +622,18 @@ require(['vs/editor/editor.main'], function () {
     updateErrorPanel(markers, editorRef);
   }
 
+  monaco.editor.defineTheme('cmdDark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' },
+    ],
+    colors: {},
+  });
+
   const initialValue = 'create 1 part 1 1 1';
   const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
-    value: initialValue, language: LANG, theme: 'vs-dark', fontSize: 14,
+    value: initialValue, language: LANG, theme: 'cmdDark', fontSize: 14,
     fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
     minimap: { enabled: false }, scrollBeyondLastLine: false, renderLineHighlight: 'line',
     tabSize: 2, wordWrap: 'off', parameterHints: { enabled: true, cycle: true },
@@ -636,23 +645,16 @@ require(['vs/editor/editor.main'], function () {
 
   function cleanPastedLine(line) {
     if (!line.includes(',')) return line;
-  
     const raw = line.trimStart();
     const indent = line.slice(0, line.length - raw.length);
     const parts = raw.split(/\s+/);
     if (!parts.length) return line;
-  
     const cmdName = parts[0].toLowerCase();
     const spec = CMDS[cmdName];
-  
-    if (!spec) {
-      return indent + parts.map(p => p.replace(/,/g, '')).join(' ');
-    }
-  
+    if (!spec) return indent + parts.map(p => p.replace(/,/g, '')).join(' ');
     const cleanParts = parts.map(p => p.replace(/,/g, ''));
     const fakeTokens = cleanParts.map((v, i) => ({ value: v, col: i + 1 }));
     const params = resolveParams(spec, fakeTokens);
-  
     const result = parts.map((part, i) => {
       if (i === 0) return part;
       const paramIdx = i - 1;
@@ -660,29 +662,19 @@ require(['vs/editor/editor.main'], function () {
       if (params[paramIdx].type === 'number') return part.replace(/,/g, '');
       return part;
     });
-  
     return indent + result.join(' ');
   }
 
   editor.onDidPaste((e) => {
     const model = editor.getModel();
-    const startLine = e.range.startLineNumber;
-    const endLine   = e.range.endLineNumber;
-
     const edits = [];
-    for (let ln = startLine; ln <= endLine; ln++) {
+    for (let ln = e.range.startLineNumber; ln <= e.range.endLineNumber; ln++) {
       const original = model.getLineContent(ln);
       const cleaned  = cleanPastedLine(original);
-      if (cleaned !== original) {
-        edits.push({
-          range: new monaco.Range(ln, 1, ln, original.length + 1),
-          text: cleaned,
-        });
-      }
+      if (cleaned !== original)
+        edits.push({ range: new monaco.Range(ln, 1, ln, original.length + 1), text: cleaned });
     }
-    if (edits.length) {
-      editor.executeEdits('paste-comma-clean', edits);
-    }
+    if (edits.length) editor.executeEdits('paste-comma-clean', edits);
   });
 
   let debounce;
@@ -696,28 +688,19 @@ require(['vs/editor/editor.main'], function () {
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
 
   document.getElementById('btn-export').addEventListener('click', () => {
-    const content = editor.getValue();
-    const blob = new Blob([content], { type: 'text/plain' });
+    const blob = new Blob([editor.getValue()], { type: 'text/plain' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'script.txt';
-    a.click();
+    a.href = URL.createObjectURL(blob); a.download = 'script.txt'; a.click();
     URL.revokeObjectURL(a.href);
   });
 
   document.getElementById('btn-import').addEventListener('click', () => {
     const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.txt';
+    input.type = 'file'; input.accept = '.txt';
     input.addEventListener('change', () => {
-      const file = input.files[0];
-      if (!file) return;
+      const file = input.files[0]; if (!file) return;
       const reader = new FileReader();
-      reader.onload = e => {
-        editor.setValue(e.target.result);
-        editor.setPosition({ lineNumber: 1, column: 1 });
-        editor.focus();
-      };
+      reader.onload = e => { editor.setValue(e.target.result); editor.setPosition({ lineNumber: 1, column: 1 }); editor.focus(); };
       reader.readAsText(file);
     });
     input.click();
