@@ -5,15 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor</title>
 <script>
-// ============================================================
-//  CHANGELOG — edit this to update the changelog modal
-// ============================================================
 const CHANGELOG = [
   {
     version: "Added hidden commands",
     date: "07/04/2025",
     changes: [
       { type: "new", text: "Added collision and teleport commands." },
+      { type: "new", text: "Added comments with '//' prefix" },
     ]
   },
   {
@@ -28,9 +26,6 @@ const CHANGELOG = [
     ]
   },
 ];
-// ============================================================
-//  END CHANGELOG CONFIG
-// ============================================================
 </script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -259,6 +254,7 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.setMonarchTokensProvider(LANG, {
     tokenizer: {
       root: [
+        [/\/\/.*$/, 'comment'],
         [/\b(create|tween|color|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
@@ -272,8 +268,11 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    const trimmed = line.trimStart();
-    const leadingSpaces = line.length - trimmed.length;
+    // Strip inline comments before parsing
+    const commentIdx = line.indexOf('//');
+    const stripped = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    const trimmed = stripped.trimStart();
+    const leadingSpaces = stripped.length - trimmed.length;
     const tokens = [];
     let i = 0;
     while (i < trimmed.length) {
@@ -291,7 +290,11 @@ require(['vs/editor/editor.main'], function () {
     const tokens = parseLine(line);
     if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
     const restCol = tokens[restTokenIdx].col;
-    return [...tokens.slice(0, restTokenIdx), { value: line.slice(restCol - 1), col: restCol, isRest: true }];
+    // Strip comment from rest value too
+    const rawRest = line.slice(restCol - 1);
+    const commentIdx = rawRest.indexOf('//');
+    const restVal = commentIdx >= 0 ? rawRest.slice(0, commentIdx).trimEnd() : rawRest;
+    return [...tokens.slice(0, restTokenIdx), { value: restVal, col: restCol, isRest: true }];
   }
 
   function getTokens(line) {
@@ -411,6 +414,9 @@ require(['vs/editor/editor.main'], function () {
     provideCompletionItems(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const textBefore = line.slice(0, position.column - 1);
+      // Don't suggest inside a comment
+      const commentIdx = textBefore.indexOf('//');
+      if (commentIdx >= 0) return { suggestions: [] };
       const rawTokensBefore = parseLine(textBefore);
       const wordInfo = model.getWordUntilPosition(position);
       const range = {
@@ -452,6 +458,9 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
+      // No hover inside comments
+      const commentIdx = line.indexOf('//');
+      if (commentIdx >= 0 && position.column > commentIdx) return null;
       const tokens = getTokens(line);
       if (!tokens.length) return null;
       const word = model.getWordAtPosition(position);
@@ -554,6 +563,9 @@ require(['vs/editor/editor.main'], function () {
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
+      // Skip pure comment lines and empty lines
+      const trimmed = line.trimStart();
+      if (trimmed.startsWith('//') || trimmed === '') continue;
       const tokens = getTokens(line);
       if (!tokens.length) continue;
       const cmdName = tokens[0].value.toLowerCase();
@@ -610,9 +622,18 @@ require(['vs/editor/editor.main'], function () {
     updateErrorPanel(markers, editorRef);
   }
 
+  monaco.editor.defineTheme('cmdDark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' },
+    ],
+    colors: {},
+  });
+
   const initialValue = 'create 1 part 1 1 1';
   const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
-    value: initialValue, language: LANG, theme: 'vs-dark', fontSize: 14,
+    value: initialValue, language: LANG, theme: 'cmdDark', fontSize: 14,
     fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
     minimap: { enabled: false }, scrollBeyondLastLine: false, renderLineHighlight: 'line',
     tabSize: 2, wordWrap: 'off', parameterHints: { enabled: true, cycle: true },
