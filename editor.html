@@ -6,6 +6,13 @@
 <title>Editor</title>
 <script>
 const CHANGELOG = [
+    {
+    version: "Added spawn command",
+    date: "09/04/2025",
+    changes: [
+      { type: "new", text: "Added spawn command." },
+    ]
+  },
   {
     version: "Added hidden commands",
     date: "07/04/2025",
@@ -254,6 +261,7 @@ require(['vs/editor/editor.main'], function () {
     friendlyfire:{ params: [{name:'boolean',type:'enum',values:BOOL_FF}], doc: 'Enables, disables, or forces friendly fire for all teams.', example: 'friendlyfire enable' },
     collision:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:COLLISION_TYPES}], doc: 'Changes the collision attribute of a part. 0 = off, 1–3 = various modes.', example: 'collision 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 0' },
     teleport:    { params: [{name:'type',type:'enum',values:TELEPORT_TYPES},{name:'target',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports a player, squad, or all players to the specified position and rotation.', example: 'teleport player PlayerName 0 5 0 0 0 0' },
+    spawn: { params: [{name:'world',type:'number'},{name:'propName',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Spawns specified prop to specified location and rotation.' },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
@@ -414,7 +422,7 @@ require(['vs/editor/editor.main'], function () {
     tokenizer: {
       root: [
         [/\/\/.*$/, 'comment'],
-        [/\b(create|tween|bot|color|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|bot|color|spawn|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
