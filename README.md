@@ -4,4 +4,5 @@ Before you say anything, yes it is made with AI. More specifically Claude, howev
 
 A simple command editor with error checking for making stuff for BRM5 RGE.
 
-Supports commonly used commands, not all of them yet.
+
+Supports all commands.
