@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor</title>
 <script>
+// ============================================================
+//  CHANGELOG — edit this to update the changelog modal
+// ============================================================
 const CHANGELOG = [
   {
     version: "Added hidden commands",
@@ -12,6 +15,7 @@ const CHANGELOG = [
     changes: [
       { type: "new", text: "Added collision and teleport commands." },
       { type: "new", text: "Added // comment support." },
+      { type: "new", text: "Added 3D tween previewer." },
     ]
   },
   {
@@ -26,15 +30,74 @@ const CHANGELOG = [
     ]
   },
 ];
+// ============================================================
+//  END CHANGELOG CONFIG
+// ============================================================
 </script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
+
+/* ── Main content area: editor + previewer side by side ── */
+#content-area { display: flex; flex: 1; min-height: 0; }
 #editor-wrap { flex: 1; min-height: 0; }
+
+/* ── 3D Previewer panel ── */
+#previewer-panel {
+  width: 0;
+  overflow: hidden;
+  transition: width 0.25s ease;
+  border-left: 0px solid #333;
+  position: relative;
+  background: #0a0a0a;
+  flex-shrink: 0;
+}
+#previewer-panel.open {
+  width: 520px;
+  border-left-width: 1px;
+}
+#previewer-canvas-wrap {
+  position: absolute; inset: 0;
+}
+#previewer-canvas-wrap canvas {
+  display: block;
+}
+
+/* ── Previewer UI overlay ── */
+#prev-ui {
+  position: absolute;
+  top: 12px; left: 12px;
+  z-index: 10;
+  background: rgba(10,10,10,0.92);
+  padding: 14px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  width: 200px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #eee;
+}
+#prev-ui .plabel { font-size: 9px; color: #00ff88; margin-bottom: 4px; text-transform: uppercase; font-weight: bold; }
+#prev-ui .scale-row { display: flex; gap: 4px; margin-bottom: 10px; }
+#prev-ui .scale-row input {
+  width: 33%; background: #1a1a1a; border: 1px solid #444; color: #fff;
+  padding: 4px; border-radius: 3px; font-size: 11px; text-align: center;
+}
+#prev-ui button {
+  width: 100%; padding: 8px; cursor: pointer; border: none;
+  border-radius: 4px; font-weight: bold; font-size: 11px;
+  font-family: 'Courier New', monospace; margin-bottom: 5px;
+}
+#prev-btn-run   { background: #00ff88; color: #000; }
+#prev-btn-run:hover { background: #00cc6e; }
+#prev-btn-reset { background: #333; color: #fff; }
+#prev-btn-reset:hover { background: #444; }
+#prev-timer { font-size: 10px; color: #555; text-align: center; margin-top: 4px; }
+
 #error-panel {
   height: 160px; background: #111; border-top: 1px solid #333;
-  display: flex; flex-direction: column; overflow: hidden;
+  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
 }
 #error-header {
   padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
@@ -48,6 +111,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   cursor: pointer; border-radius: 3px;
 }
 .hdr-btn:hover { background: #2a2a2a; color: #abb2bf; border-color: #555; }
+.hdr-btn.active { background: #1a3a2a; color: #4ec97a; border-color: #2a5a3a; }
 #error-list { flex: 1; overflow-y: auto; padding: 4px 0; }
 .err-row {
   display: grid; grid-template-columns: 28px 60px 60px 1fr;
@@ -98,7 +162,26 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 </head>
 <body>
 <div id="app">
-  <div id="editor-wrap"></div>
+  <div id="content-area">
+    <div id="editor-wrap"></div>
+
+    <!-- 3D Previewer panel -->
+    <div id="previewer-panel">
+      <div id="previewer-canvas-wrap"></div>
+      <div id="prev-ui">
+        <div class="plabel">Default Scale (X Y Z)</div>
+        <div class="scale-row">
+          <input type="number" id="scX" value="2" step="0.1">
+          <input type="number" id="scY" value="2" step="0.1">
+          <input type="number" id="scZ" value="2" step="0.1">
+        </div>
+        <button id="prev-btn-run">▶ RUN SCRIPT</button>
+        <button id="prev-btn-reset">↺ RESET</button>
+        <div id="prev-timer">Time: 0.00s</div>
+      </div>
+    </div>
+  </div>
+
   <div id="error-panel">
     <div id="error-header">
       <span>errors</span>
@@ -106,6 +189,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
         <button class="hdr-btn" id="btn-import">Import</button>
         <button class="hdr-btn" id="btn-export">Export</button>
+        <button class="hdr-btn" id="btn-previewer">3D Preview</button>
         <button class="hdr-btn" id="btn-changelog">Changelog</button>
         <span style="color: #666;">made with claude</span>
       </span>
@@ -126,7 +210,21 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
-<script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── Changelog ──
 (function() {
   const body = document.getElementById('cl-body');
   const overlay = document.getElementById('cl-overlay');
@@ -151,7 +249,180 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.classList.remove('open'); });
 })();
+
+// ── 3D Previewer ──
+const panel = document.getElementById('previewer-panel');
+const canvasWrap = document.getElementById('previewer-canvas-wrap');
+const btnPreviewer = document.getElementById('btn-previewer');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0a);
+const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+camera.position.set(20, 20, 20);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+canvasWrap.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+scene.add(new THREE.GridHelper(100, 100, 0x222222, 0x111111));
+const dLight = new THREE.DirectionalLight(0xffffff, 2.5);
+dLight.position.set(10, 20, 10);
+scene.add(dLight, new THREE.AmbientLight(0xffffff, 0.4));
+controls.update();
+
+let registry = {};
+let isPlaying = false;
+let playbackStart = 0;
+
+function resizePreview() {
+  const w = canvasWrap.clientWidth;
+  const h = canvasWrap.clientHeight;
+  if (w === 0 || h === 0) return;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+function getOrCreatePart(uid) {
+  if (!registry[uid]) {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshPhongMaterial({
+      color: new THREE.Color(`hsl(${Math.random() * 360}, 70%, 50%)`),
+      transparent: true, opacity: 0.9
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    const sx = parseFloat(document.getElementById('scX').value) || 1;
+    const sy = parseFloat(document.getElementById('scY').value) || 1;
+    const sz = parseFloat(document.getElementById('scZ').value) || 1;
+    mesh.scale.set(sx, sy, sz);
+    scene.add(mesh);
+    registry[uid] = { mesh, timeline: [] };
+  }
+  return registry[uid];
+}
+
+function resetScene() {
+  isPlaying = false;
+  for (let id in registry) scene.remove(registry[id].mesh);
+  registry = {};
+  document.getElementById('prev-timer').innerText = 'Time: 0.00s';
+}
+
+function runSequence(scriptText) {
+  isPlaying = false;
+  const lines = scriptText.split('\n');
+  let timeCursor = 0;
+  const toRad = Math.PI / 180;
+
+  for (let id in registry) {
+    registry[id].mesh.position.set(0, 0, 0);
+    registry[id].mesh.rotation.set(0, 0, 0);
+    registry[id].timeline = [];
+  }
+
+  lines.forEach(rawLine => {
+    // Strip comments
+    const commentIdx = rawLine.indexOf('//');
+    const line = commentIdx >= 0 ? rawLine.slice(0, commentIdx) : rawLine;
+    const p = line.trim().split(/\s+/);
+    if (p.length < 2 || !p[0]) return;
+    const action = p[0].toLowerCase();
+
+    if (action === 'wait') {
+      timeCursor += parseFloat(p[1]) || 0;
+    } else if (action === 'move' || action === 'tween') {
+      const uid = p[2];
+      if (!uid) return;
+      const part = getOrCreatePart(uid);
+      const isMove = action === 'move';
+      const dur = isMove ? 0 : (parseFloat(p[3]) || 0);
+      const idx = isMove ? 3 : 4;
+
+      let startPos = new THREE.Vector3(0, 0, 0);
+      let startRot = { x: 0, y: 0, z: 0 };
+      if (part.timeline.length > 0) {
+        const last = part.timeline[part.timeline.length - 1];
+        startPos.copy(last.tP);
+        startRot = { x: last.tR.x, y: last.tR.y, z: last.tR.z };
+      }
+
+      part.timeline.push({
+        startTime: timeCursor,
+        duration: dur,
+        sP: startPos,
+        tP: new THREE.Vector3(parseFloat(p[idx]) || 0, parseFloat(p[idx+1]) || 0, parseFloat(p[idx+2]) || 0),
+        sR: startRot,
+        tR: new THREE.Euler(
+          (parseFloat(p[idx+3]) || 0) * toRad,
+          (parseFloat(p[idx+4]) || 0) * toRad,
+          (parseFloat(p[idx+5]) || 0) * toRad
+        )
+      });
+    }
+  });
+
+  playbackStart = performance.now();
+  isPlaying = true;
+}
+
+document.getElementById('prev-btn-reset').addEventListener('click', resetScene);
+document.getElementById('prev-btn-run').addEventListener('click', () => {
+  // Pull script from Monaco editor if available, otherwise fallback
+  const script = window._getEditorValue ? window._getEditorValue() : '';
+  resetScene();
+  runSequence(script);
+});
+
+// Toggle previewer panel
+let previewerOpen = false;
+btnPreviewer.addEventListener('click', () => {
+  previewerOpen = !previewerOpen;
+  panel.classList.toggle('open', previewerOpen);
+  btnPreviewer.classList.toggle('active', previewerOpen);
+  // Give the CSS transition time to finish, then resize
+  setTimeout(() => {
+    resizePreview();
+    if (window._monacoEditor) window._monacoEditor.layout();
+  }, 260);
+});
+
+// Animate loop
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  if (isPlaying) {
+    const now = (performance.now() - playbackStart) / 1000;
+    document.getElementById('prev-timer').innerText = `Time: ${now.toFixed(2)}s`;
+    for (let id in registry) {
+      const part = registry[id];
+      let active = null;
+      for (let entry of part.timeline) {
+        if (now >= entry.startTime) active = entry;
+      }
+      if (active) {
+        const elapsed = now - active.startTime;
+        let t = active.duration <= 0 ? 1 : Math.min(elapsed / active.duration, 1);
+        const ease = t * t * (3 - 2 * t);
+        part.mesh.position.lerpVectors(active.sP, active.tP, ease);
+        if (active.sR && active.tR) {
+          part.mesh.rotation.x = active.sR.x + (active.tR.x - active.sR.x) * ease;
+          part.mesh.rotation.y = active.sR.y + (active.tR.y - active.sR.y) * ease;
+          part.mesh.rotation.z = active.sR.z + (active.tR.z - active.sR.z) * ease;
+        }
+      }
+    }
+  }
+  if (previewerOpen) renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  if (previewerOpen) resizePreview();
+  if (window._monacoEditor) window._monacoEditor.layout();
+});
 </script>
+
 <script>
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' } });
 require(['vs/editor/editor.main'], function () {
@@ -162,7 +433,7 @@ require(['vs/editor/editor.main'], function () {
   function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
 
   const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
-  const BOT_SUB         = ['spawn','delete','alert','direct']
+  const BOT_SUB         = ['spawn','delete','alert','direct'];
   const TRIGGER_SUB     = ['add','addbutton','remove','color','set','activate','reset','create','delete','executable','whitelist'];
   const WORLD_SUB       = ['list','load'];
   const TIME_SUB        = ['start','stop','now','set'];
@@ -199,6 +470,16 @@ require(['vs/editor/editor.main'], function () {
     friendlyfire:{ params: [{name:'boolean',type:'enum',values:BOOL_FF}], doc: 'Enables, disables, or sets all-team friendly fire.' },
     collision:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:COLLISION_TYPES}], doc: 'Changes collision attribute value.' },
     teleport:    { params: [{name:'type',type:'enum',values:TELEPORT_TYPES},{name:'target',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports thing to specified location.' },
+    bot: {
+      params: [{name:'subtype',type:'enum',values:BOT_SUB}],
+      subtypes: {
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawns a bot at the specified location.' },
+        delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
+        alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts all bots in the specified world.' },
+        direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position.' },
+      },
+      doc: 'Spawn, delete and control bots.',
+    },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
@@ -215,16 +496,6 @@ require(['vs/editor/editor.main'], function () {
         whitelist:  { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Manages trigger whitelist.' },
       },
       doc: 'Create, edit and add things to triggers.',
-    },
-    bot: {
-      params: [{name:'subtype',type:'enum',values:BOT_SUB}],
-      subtypes: {
-        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawns a bot at the specified location.' },
-        delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
-        alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts all bots in the specified world.' },
-        direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position.' },
-      },
-      doc: 'Spawn, delete and control bots.',
     },
     world: {
       params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
@@ -266,10 +537,10 @@ require(['vs/editor/editor.main'], function () {
     tokenizer: {
       root: [
         [/\/\/.*$/, 'comment'],
-        [/\b(create|tween|bot|color|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|color|hud|revive|friendlyfire|collision|teleport|bot|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
-        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...BOT_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
         [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
         [/-?\d+(\.\d+)?/, 'number'],
         [/"[^"]*"/, 'string'],
@@ -279,7 +550,6 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    // Strip inline comments before parsing
     const commentIdx = line.indexOf('//');
     const stripped = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
     const trimmed = stripped.trimStart();
@@ -301,7 +571,6 @@ require(['vs/editor/editor.main'], function () {
     const tokens = parseLine(line);
     if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
     const restCol = tokens[restTokenIdx].col;
-    // Strip comment from rest value too
     const rawRest = line.slice(restCol - 1);
     const commentIdx = rawRest.indexOf('//');
     const restVal = commentIdx >= 0 ? rawRest.slice(0, commentIdx).trimEnd() : rawRest;
@@ -425,9 +694,7 @@ require(['vs/editor/editor.main'], function () {
     provideCompletionItems(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const textBefore = line.slice(0, position.column - 1);
-      // Don't suggest inside a comment
-      const commentIdx = textBefore.indexOf('//');
-      if (commentIdx >= 0) return { suggestions: [] };
+      if (textBefore.indexOf('//') >= 0) return { suggestions: [] };
       const rawTokensBefore = parseLine(textBefore);
       const wordInfo = model.getWordUntilPosition(position);
       const range = {
@@ -469,7 +736,6 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
-      // No hover inside comments
       const commentIdx = line.indexOf('//');
       if (commentIdx >= 0 && position.column > commentIdx) return null;
       const tokens = getTokens(line);
@@ -574,7 +840,6 @@ require(['vs/editor/editor.main'], function () {
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
-      // Skip pure comment lines and empty lines
       const trimmed = line.trimStart();
       if (trimmed.startsWith('//') || trimmed === '') continue;
       const tokens = getTokens(line);
@@ -634,11 +899,8 @@ require(['vs/editor/editor.main'], function () {
   }
 
   monaco.editor.defineTheme('cmdDark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-      { token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' },
-    ],
+    base: 'vs-dark', inherit: true,
+    rules: [{ token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' }],
     colors: {},
   });
 
@@ -653,6 +915,10 @@ require(['vs/editor/editor.main'], function () {
     autoClosingBrackets: 'never', autoClosingQuotes: 'never',
     inlayHints: { enabled: 'on' },
   });
+
+  // Expose editor value to the previewer module
+  window._getEditorValue = () => editor.getValue();
+  window._monacoEditor = editor;
 
   function cleanPastedLine(line) {
     if (!line.includes(',')) return line;
