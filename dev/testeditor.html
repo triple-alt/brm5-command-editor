@@ -11,7 +11,7 @@ const CHANGELOG = [
     date: "07/04/2025",
     changes: [
       { type: "new", text: "Added collision and teleport commands." },
-      { type: "new", text: "Added comments with '//' prefix" },
+      { type: "new", text: "Added // comment support." },
     ]
   },
   {
@@ -162,6 +162,7 @@ require(['vs/editor/editor.main'], function () {
   function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
 
   const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
+  const BOT_SUB         = ['spawn','delete','alert','direct']
   const TRIGGER_SUB     = ['add','addbutton','remove','color','set','activate','reset','create','delete','executable','whitelist'];
   const WORLD_SUB       = ['list','load'];
   const TIME_SUB        = ['start','stop','now','set'];
@@ -215,6 +216,16 @@ require(['vs/editor/editor.main'], function () {
       },
       doc: 'Create, edit and add things to triggers.',
     },
+    bot: {
+      params: [{name:'subtype',type:'enum',values:BOT_SUB}],
+      subtypes: {
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawns a bot at the specified location.' },
+        delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
+        alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts all bots in the specified world.' },
+        direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position.' },
+      },
+      doc: 'Spawn, delete and control bots.',
+    },
     world: {
       params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
       subtypes: {
@@ -255,7 +266,7 @@ require(['vs/editor/editor.main'], function () {
     tokenizer: {
       root: [
         [/\/\/.*$/, 'comment'],
-        [/\b(create|tween|color|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|bot|color|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
