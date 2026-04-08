@@ -6,3 +6,4 @@ A simple command editor with error checking for making stuff for BRM5 RGE.
 
 
 Supports all commands.
+Lists all materials and props from the asset browser in related commands.
