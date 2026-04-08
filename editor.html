@@ -12,6 +12,7 @@ const CHANGELOG = [
     changes: [
       { type: "new", text: "Added collision, teleport and bot commands." },
       { type: "new", text: "Added // comment support." },
+      { type: "new", text: "Added command reference." },
     ]
   },
   {
@@ -145,7 +146,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
         <button class="hdr-btn" id="btn-import">Import</button>
         <button class="hdr-btn" id="btn-export">Export</button>
-        <button class="hdr-btn" id="btn-docs">Docs</button>
+        <button class="hdr-btn" id="btn-docs">Commands</button>
         <button class="hdr-btn" id="btn-changelog">Changelog</button>
         <span style="color: #666;">made with claude</span>
       </span>
@@ -169,7 +170,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 <div id="docs-overlay" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">
-      <span class="modal-title">command reference</span>
+      <span class="modal-title">Command Reference</span>
       <button class="modal-close" id="docs-close" title="Close">&#x2715;</button>
     </div>
     <div id="docs-layout">
