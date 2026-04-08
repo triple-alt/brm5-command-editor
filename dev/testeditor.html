@@ -15,7 +15,7 @@ const CHANGELOG = [
     changes: [
       { type: "new", text: "Added collision and teleport commands." },
       { type: "new", text: "Added // comment support." },
-      { type: "new", text: "Added 3D tween previewer." },
+      { type: "new", text: "Added 3D tween previewer (floating window)." },
     ]
   },
   {
@@ -38,62 +38,7 @@ const CHANGELOG = [
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
-
-/* ── Main content area: editor + previewer side by side ── */
-#content-area { display: flex; flex: 1; min-height: 0; }
 #editor-wrap { flex: 1; min-height: 0; }
-
-/* ── 3D Previewer panel ── */
-#previewer-panel {
-  width: 0;
-  overflow: hidden;
-  transition: width 0.25s ease;
-  border-left: 0px solid #333;
-  position: relative;
-  background: #0a0a0a;
-  flex-shrink: 0;
-}
-#previewer-panel.open {
-  width: 520px;
-  border-left-width: 1px;
-}
-#previewer-canvas-wrap {
-  position: absolute; inset: 0;
-}
-#previewer-canvas-wrap canvas {
-  display: block;
-}
-
-/* ── Previewer UI overlay ── */
-#prev-ui {
-  position: absolute;
-  top: 12px; left: 12px;
-  z-index: 10;
-  background: rgba(10,10,10,0.92);
-  padding: 14px;
-  border-radius: 6px;
-  border: 1px solid #333;
-  width: 200px;
-  font-family: 'Courier New', monospace;
-  font-size: 11px;
-  color: #eee;
-}
-#prev-ui .plabel { font-size: 9px; color: #00ff88; margin-bottom: 4px; text-transform: uppercase; font-weight: bold; }
-#prev-ui .scale-row { display: flex; gap: 4px; margin-bottom: 10px; }
-#prev-ui .scale-row input {
-  width: 33%; background: #1a1a1a; border: 1px solid #444; color: #fff;
-  padding: 4px; border-radius: 3px; font-size: 11px; text-align: center;
-}
-#prev-ui button {
-  width: 100%; padding: 8px; cursor: pointer; border: none;
-  border-radius: 4px; font-weight: bold; font-size: 11px;
-  font-family: 'Courier New', monospace; margin-bottom: 5px;
-}
-#prev-btn-run   { background: #00ff88; color: #000; }
-#prev-btn-run:hover { background: #00cc6e; }
-#prev-btn-reset { background: #333; color: #fff; }
-#prev-btn-reset:hover { background: #444; }
-#prev-timer { font-size: 10px; color: #555; text-align: center; margin-top: 4px; }
 
 #error-panel {
   height: 160px; background: #111; border-top: 1px solid #333;
@@ -158,30 +103,104 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .cl-tag.new    { background: #1a3a26; color: #4ec97a; border: 1px solid #2a5a3a; }
 .cl-tag.fix    { background: #3a2020; color: #e06c75; border: 1px solid #5a3030; }
 .cl-tag.change { background: #2a2a10; color: #e5c07b; border: 1px solid #4a4a20; }
+
+/* ── Floating 3D previewer window ── */
+#prev-win {
+  display: none;
+  position: fixed;
+  right: 24px;
+  top: 24px;
+  width: 480px;
+  height: 360px;
+  min-width: 280px;
+  min-height: 200px;
+  background: #0d0d0d;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+  z-index: 5000;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: Consolas, monospace;
+}
+#prev-win.open { display: flex; }
+
+/* Title bar — drag handle */
+#prev-titlebar {
+  height: 30px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  cursor: move;
+  flex-shrink: 0;
+  user-select: none;
+}
+#prev-titlebar span {
+  font-size: 11px; color: #666; flex: 1;
+}
+/* Playback controls */
+.prev-ctrl {
+  background: none; border: 1px solid #444; color: #888;
+  font-size: 11px; padding: 1px 7px; cursor: pointer;
+  border-radius: 3px; font-family: Consolas, monospace;
+}
+.prev-ctrl:hover { background: #2a2a2a; color: #abb2bf; border-color: #555; }
+.prev-ctrl.active { background: #1a3a2a; color: #4ec97a; border-color: #2a5a3a; }
+#prev-close-btn {
+  background: none; border: none; color: #555;
+  font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1;
+}
+#prev-close-btn:hover { color: #e06c75; }
+
+/* Scale inputs row inside titlebar */
+#prev-scale-row {
+  display: flex; gap: 3px; align-items: center;
+}
+#prev-scale-row input {
+  width: 38px; background: #111; border: 1px solid #333; color: #888;
+  font-size: 10px; padding: 1px 3px; border-radius: 3px;
+  font-family: Consolas, monospace; text-align: center;
+}
+#prev-scale-row label { font-size: 9px; color: #444; }
+
+/* Canvas fill */
+#prev-canvas-wrap {
+  flex: 1; position: relative; overflow: hidden;
+}
+#prev-canvas-wrap canvas { display: block; }
+
+/* Timer */
+#prev-timer {
+  position: absolute; bottom: 6px; right: 8px;
+  font-size: 10px; color: #444; pointer-events: none;
+  font-family: Consolas, monospace;
+}
+
+/* Resize handle */
+#prev-resize {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 14px; height: 14px;
+  cursor: se-resize;
+  z-index: 10;
+}
+#prev-resize::after {
+  content: '';
+  position: absolute;
+  bottom: 3px; right: 3px;
+  width: 6px; height: 6px;
+  border-right: 2px solid #444;
+  border-bottom: 2px solid #444;
+}
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="content-area">
-    <div id="editor-wrap"></div>
-
-    <!-- 3D Previewer panel -->
-    <div id="previewer-panel">
-      <div id="previewer-canvas-wrap"></div>
-      <div id="prev-ui">
-        <div class="plabel">Default Scale (X Y Z)</div>
-        <div class="scale-row">
-          <input type="number" id="scX" value="2" step="0.1">
-          <input type="number" id="scY" value="2" step="0.1">
-          <input type="number" id="scZ" value="2" step="0.1">
-        </div>
-        <button id="prev-btn-run">▶ RUN SCRIPT</button>
-        <button id="prev-btn-reset">↺ RESET</button>
-        <div id="prev-timer">Time: 0.00s</div>
-      </div>
-    </div>
-  </div>
-
+  <div id="editor-wrap"></div>
   <div id="error-panel">
     <div id="error-header">
       <span>errors</span>
@@ -196,6 +215,27 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     </div>
     <div id="error-list"><div id="no-errors">no errors</div></div>
   </div>
+</div>
+
+<!-- Floating 3D previewer window -->
+<div id="prev-win">
+  <div id="prev-titlebar">
+    <span>3d preview</span>
+    <div id="prev-scale-row">
+      <label>scale</label>
+      <input type="number" id="scX" value="2" step="0.1" title="Scale X">
+      <input type="number" id="scY" value="2" step="0.1" title="Scale Y">
+      <input type="number" id="scZ" value="2" step="0.1" title="Scale Z">
+    </div>
+    <button class="prev-ctrl" id="prev-btn-run" title="Run">▶</button>
+    <button class="prev-ctrl" id="prev-btn-pause" title="Pause">⏸</button>
+    <button class="prev-ctrl" id="prev-btn-restart" title="Restart">↺</button>
+    <button id="prev-close-btn" title="Close">✕</button>
+  </div>
+  <div id="prev-canvas-wrap">
+    <div id="prev-timer">0.00s</div>
+  </div>
+  <div id="prev-resize"></div>
 </div>
 
 <!-- Changelog modal -->
@@ -229,8 +269,8 @@ import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/cont
     entry.changes.forEach(c => {
       const row = document.createElement('div');
       row.className = 'cl-entry';
-      const tagType = c.type || 'change';
-      row.innerHTML = `<span class="cl-tag ${tagType}">${tagType}</span><span>${c.text}</span>`;
+      const t = c.type || 'change';
+      row.innerHTML = `<span class="cl-tag ${t}">${t}</span><span>${c.text}</span>`;
       block.appendChild(row);
     });
     body.appendChild(block);
@@ -241,45 +281,49 @@ import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/cont
   document.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.classList.remove('open'); });
 })();
 
-// ── 3D Previewer ──
-const panel = document.getElementById('previewer-panel');
-const canvasWrap = document.getElementById('previewer-canvas-wrap');
-const btnPreviewer = document.getElementById('btn-previewer');
+// ── Three.js setup ──
+const canvasWrap = document.getElementById('prev-canvas-wrap');
+const timerEl   = document.getElementById('prev-timer');
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0a);
-const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-camera.position.set(20, 20, 20);
+const scene    = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d0d);
+const camera   = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+camera.position.set(20, 16, 20);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 canvasWrap.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-scene.add(new THREE.GridHelper(100, 100, 0x222222, 0x111111));
+controls.enableDamping = true;
+
+scene.add(new THREE.GridHelper(100, 50, 0x1a1a1a, 0x111111));
 const dLight = new THREE.DirectionalLight(0xffffff, 2.5);
 dLight.position.set(10, 20, 10);
 scene.add(dLight, new THREE.AmbientLight(0xffffff, 0.4));
-controls.update();
 
-let registry = {};
-let isPlaying = false;
-let playbackStart = 0;
-
-function resizePreview() {
+function syncSize() {
   const w = canvasWrap.clientWidth;
   const h = canvasWrap.clientHeight;
-  if (w === 0 || h === 0) return;
+  if (w < 1 || h < 1) return;
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 
+// ── State ──
+let registry = {};
+let isPlaying = false;
+let isPaused  = false;
+let pausedAt  = 0;
+let playbackStart = 0;
+let totalDuration = 0;
+
 function getOrCreatePart(uid) {
   if (!registry[uid]) {
     const geo = new THREE.BoxGeometry(1, 1, 1);
     const mat = new THREE.MeshPhongMaterial({
-      color: new THREE.Color(`hsl(${Math.random() * 360}, 70%, 50%)`),
+      color: new THREE.Color(`hsl(${Math.random() * 360}, 65%, 52%)`),
       transparent: true, opacity: 0.9
     });
     const mesh = new THREE.Mesh(geo, mat);
@@ -293,125 +337,187 @@ function getOrCreatePart(uid) {
   return registry[uid];
 }
 
-function resetScene() {
-  isPlaying = false;
+function clearScene() {
   for (let id in registry) scene.remove(registry[id].mesh);
   registry = {};
-  document.getElementById('prev-timer').innerText = 'Time: 0.00s';
 }
 
-function runSequence(scriptText) {
-  isPlaying = false;
-  const lines = scriptText.split('\n');
-  let timeCursor = 0;
+function buildTimeline(scriptText) {
+  clearScene();
+  isPlaying = false; isPaused = false; pausedAt = 0; totalDuration = 0;
   const toRad = Math.PI / 180;
+  let timeCursor = 0;
 
-  for (let id in registry) {
-    registry[id].mesh.position.set(0, 0, 0);
-    registry[id].mesh.rotation.set(0, 0, 0);
-    registry[id].timeline = [];
-  }
-
-  lines.forEach(rawLine => {
-    // Strip comments
-    const commentIdx = rawLine.indexOf('//');
-    const line = commentIdx >= 0 ? rawLine.slice(0, commentIdx) : rawLine;
+  scriptText.split('\n').forEach(rawLine => {
+    const ci = rawLine.indexOf('//');
+    const line = ci >= 0 ? rawLine.slice(0, ci) : rawLine;
     const p = line.trim().split(/\s+/);
-    if (p.length < 2 || !p[0]) return;
+    if (!p[0]) return;
     const action = p[0].toLowerCase();
 
     if (action === 'wait') {
       timeCursor += parseFloat(p[1]) || 0;
     } else if (action === 'move' || action === 'tween') {
-      const uid = p[2];
-      if (!uid) return;
+      const uid = p[2]; if (!uid) return;
       const part = getOrCreatePart(uid);
       const isMove = action === 'move';
       const dur = isMove ? 0 : (parseFloat(p[3]) || 0);
       const idx = isMove ? 3 : 4;
-
-      let startPos = new THREE.Vector3(0, 0, 0);
-      let startRot = { x: 0, y: 0, z: 0 };
+      let sP = new THREE.Vector3(), sR = { x:0, y:0, z:0 };
       if (part.timeline.length > 0) {
         const last = part.timeline[part.timeline.length - 1];
-        startPos.copy(last.tP);
-        startRot = { x: last.tR.x, y: last.tR.y, z: last.tR.z };
+        sP.copy(last.tP);
+        sR = { x: last.tR.x, y: last.tR.y, z: last.tR.z };
       }
-
-      part.timeline.push({
-        startTime: timeCursor,
-        duration: dur,
-        sP: startPos,
-        tP: new THREE.Vector3(parseFloat(p[idx]) || 0, parseFloat(p[idx+1]) || 0, parseFloat(p[idx+2]) || 0),
-        sR: startRot,
+      const entry = {
+        startTime: timeCursor, duration: dur, sP,
+        tP: new THREE.Vector3(parseFloat(p[idx])||0, parseFloat(p[idx+1])||0, parseFloat(p[idx+2])||0),
+        sR,
         tR: new THREE.Euler(
-          (parseFloat(p[idx+3]) || 0) * toRad,
-          (parseFloat(p[idx+4]) || 0) * toRad,
-          (parseFloat(p[idx+5]) || 0) * toRad
+          (parseFloat(p[idx+3])||0)*toRad,
+          (parseFloat(p[idx+4])||0)*toRad,
+          (parseFloat(p[idx+5])||0)*toRad
         )
-      });
+      };
+      part.timeline.push(entry);
+      totalDuration = Math.max(totalDuration, timeCursor + dur);
     }
   });
-
-  playbackStart = performance.now();
-  isPlaying = true;
 }
 
-document.getElementById('prev-btn-reset').addEventListener('click', resetScene);
-document.getElementById('prev-btn-run').addEventListener('click', () => {
-  // Pull script from Monaco editor if available, otherwise fallback
+function applyTime(now) {
+  for (let id in registry) {
+    const part = registry[id];
+    let active = null;
+    for (let e of part.timeline) { if (now >= e.startTime) active = e; }
+    if (!active) continue;
+    const elapsed = now - active.startTime;
+    const t = active.duration <= 0 ? 1 : Math.min(elapsed / active.duration, 1);
+    const ease = t * t * (3 - 2 * t);
+    part.mesh.position.lerpVectors(active.sP, active.tP, ease);
+    part.mesh.rotation.x = active.sR.x + (active.tR.x - active.sR.x) * ease;
+    part.mesh.rotation.y = active.sR.y + (active.tR.y - active.sR.y) * ease;
+    part.mesh.rotation.z = active.sR.z + (active.tR.z - active.sR.z) * ease;
+  }
+}
+
+// ── Controls ──
+const btnRun     = document.getElementById('prev-btn-run');
+const btnPause   = document.getElementById('prev-btn-pause');
+const btnRestart = document.getElementById('prev-btn-restart');
+
+btnRun.addEventListener('click', () => {
   const script = window._getEditorValue ? window._getEditorValue() : '';
-  resetScene();
-  runSequence(script);
+  buildTimeline(script);
+  playbackStart = performance.now();
+  isPlaying = true; isPaused = false;
+  btnRun.classList.add('active');
+  btnPause.classList.remove('active');
 });
 
-// Toggle previewer panel
-let previewerOpen = false;
+btnPause.addEventListener('click', () => {
+  if (!isPlaying) return;
+  if (!isPaused) {
+    isPaused = true;
+    pausedAt = (performance.now() - playbackStart) / 1000;
+    btnPause.classList.add('active');
+  } else {
+    isPaused = false;
+    playbackStart = performance.now() - pausedAt * 1000;
+    btnPause.classList.remove('active');
+  }
+});
+
+btnRestart.addEventListener('click', () => {
+  if (!isPlaying && Object.keys(registry).length === 0) {
+    // Nothing built yet — build first
+    const script = window._getEditorValue ? window._getEditorValue() : '';
+    buildTimeline(script);
+  } else {
+    // Reset all meshes to start positions
+    for (let id in registry) {
+      registry[id].mesh.position.set(0,0,0);
+      registry[id].mesh.rotation.set(0,0,0);
+    }
+    // Reset timelines in place without rebuilding scene
+    for (let id in registry) registry[id].mesh.position.set(0,0,0);
+  }
+  playbackStart = performance.now();
+  isPlaying = true; isPaused = false; pausedAt = 0;
+  btnRun.classList.add('active');
+  btnPause.classList.remove('active');
+});
+
+// ── Window open/close/drag/resize ──
+const win = document.getElementById('prev-win');
+const btnPreviewer = document.getElementById('btn-previewer');
+const titlebar = document.getElementById('prev-titlebar');
+const resizeHandle = document.getElementById('prev-resize');
+
+let winOpen = false;
 btnPreviewer.addEventListener('click', () => {
-  previewerOpen = !previewerOpen;
-  panel.classList.toggle('open', previewerOpen);
-  btnPreviewer.classList.toggle('active', previewerOpen);
-  // Give the CSS transition time to finish, then resize
-  setTimeout(() => {
-    resizePreview();
-    if (window._monacoEditor) window._monacoEditor.layout();
-  }, 260);
+  winOpen = !winOpen;
+  win.classList.toggle('open', winOpen);
+  btnPreviewer.classList.toggle('active', winOpen);
+  if (winOpen) { setTimeout(syncSize, 10); }
 });
 
-// Animate loop
+document.getElementById('prev-close-btn').addEventListener('click', () => {
+  winOpen = false;
+  win.classList.remove('open');
+  btnPreviewer.classList.remove('active');
+});
+
+// Drag
+let dragging = false, dragOX = 0, dragOY = 0;
+titlebar.addEventListener('mousedown', e => {
+  if (e.target !== titlebar && e.target !== titlebar.querySelector('span')) return;
+  dragging = true;
+  dragOX = e.clientX - win.offsetLeft;
+  dragOY = e.clientY - win.offsetTop;
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (dragging) {
+    win.style.left = Math.max(0, e.clientX - dragOX) + 'px';
+    win.style.top  = Math.max(0, e.clientY - dragOY) + 'px';
+    win.style.right = 'auto';
+  }
+  if (resizing) {
+    const newW = Math.max(280, resizeStartW + (e.clientX - resizeStartX));
+    const newH = Math.max(200, resizeStartH + (e.clientY - resizeStartY));
+    win.style.width  = newW + 'px';
+    win.style.height = newH + 'px';
+    syncSize();
+  }
+});
+document.addEventListener('mouseup', () => { dragging = false; resizing = false; });
+
+// Resize
+let resizing = false, resizeStartX = 0, resizeStartY = 0, resizeStartW = 0, resizeStartH = 0;
+resizeHandle.addEventListener('mousedown', e => {
+  resizing = true;
+  resizeStartX = e.clientX; resizeStartY = e.clientY;
+  resizeStartW = win.offsetWidth; resizeStartH = win.offsetHeight;
+  e.preventDefault();
+});
+
+// ── Animate ──
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  if (isPlaying) {
-    const now = (performance.now() - playbackStart) / 1000;
-    document.getElementById('prev-timer').innerText = `Time: ${now.toFixed(2)}s`;
-    for (let id in registry) {
-      const part = registry[id];
-      let active = null;
-      for (let entry of part.timeline) {
-        if (now >= entry.startTime) active = entry;
-      }
-      if (active) {
-        const elapsed = now - active.startTime;
-        let t = active.duration <= 0 ? 1 : Math.min(elapsed / active.duration, 1);
-        const ease = t * t * (3 - 2 * t);
-        part.mesh.position.lerpVectors(active.sP, active.tP, ease);
-        if (active.sR && active.tR) {
-          part.mesh.rotation.x = active.sR.x + (active.tR.x - active.sR.x) * ease;
-          part.mesh.rotation.y = active.sR.y + (active.tR.y - active.sR.y) * ease;
-          part.mesh.rotation.z = active.sR.z + (active.tR.z - active.sR.z) * ease;
-        }
-      }
+  if (winOpen) {
+    if (isPlaying && !isPaused) {
+      const now = (performance.now() - playbackStart) / 1000;
+      timerEl.textContent = now.toFixed(2) + 's';
+      applyTime(now);
+    } else if (isPaused) {
+      timerEl.textContent = pausedAt.toFixed(2) + 's ⏸';
     }
+    renderer.render(scene, camera);
   }
-  if (previewerOpen) renderer.render(scene, camera);
 }
 animate();
-
-window.addEventListener('resize', () => {
-  if (previewerOpen) resizePreview();
-  if (window._monacoEditor) window._monacoEditor.layout();
-});
 </script>
 
 <script>
@@ -541,8 +647,8 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    const commentIdx = line.indexOf('//');
-    const stripped = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    const ci = line.indexOf('//');
+    const stripped = ci >= 0 ? line.slice(0, ci) : line;
     const trimmed = stripped.trimStart();
     const leadingSpaces = stripped.length - trimmed.length;
     const tokens = [];
@@ -563,8 +669,8 @@ require(['vs/editor/editor.main'], function () {
     if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
     const restCol = tokens[restTokenIdx].col;
     const rawRest = line.slice(restCol - 1);
-    const commentIdx = rawRest.indexOf('//');
-    const restVal = commentIdx >= 0 ? rawRest.slice(0, commentIdx).trimEnd() : rawRest;
+    const ci = rawRest.indexOf('//');
+    const restVal = ci >= 0 ? rawRest.slice(0, ci).trimEnd() : rawRest;
     return [...tokens.slice(0, restTokenIdx), { value: restVal, col: restCol, isRest: true }];
   }
 
@@ -727,8 +833,8 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
-      const commentIdx = line.indexOf('//');
-      if (commentIdx >= 0 && position.column > commentIdx) return null;
+      const ci = line.indexOf('//');
+      if (ci >= 0 && position.column > ci) return null;
       const tokens = getTokens(line);
       if (!tokens.length) return null;
       const word = model.getWordAtPosition(position);
@@ -907,9 +1013,7 @@ require(['vs/editor/editor.main'], function () {
     inlayHints: { enabled: 'on' },
   });
 
-  // Expose editor value to the previewer module
   window._getEditorValue = () => editor.getValue();
-  window._monacoEditor = editor;
 
   function cleanPastedLine(line) {
     if (!line.includes(',')) return line;
