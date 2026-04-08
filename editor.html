@@ -63,26 +63,29 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
 
-/* ── Changelog modal ── */
-#cl-overlay {
+/* ── Shared modal base ── */
+.modal-overlay {
   display: none; position: fixed; inset: 0;
   background: rgba(0,0,0,0.65); z-index: 9999;
   align-items: center; justify-content: center;
 }
-#cl-overlay.open { display: flex; }
-#cl-modal {
+.modal-overlay.open { display: flex; }
+.modal-box {
   background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 6px;
-  width: 480px; max-width: 92vw; max-height: 72vh;
+  max-width: 92vw; max-height: 82vh;
   display: flex; flex-direction: column;
   box-shadow: 0 8px 40px rgba(0,0,0,0.6); font-family: Consolas, monospace;
 }
-#cl-header {
+.modal-header {
   display: flex; align-items: center; padding: 10px 14px;
-  border-bottom: 1px solid #333; flex-shrink: 0;
+  border-bottom: 1px solid #333; flex-shrink: 0; gap: 10px;
 }
-#cl-title { color: #abb2bf; font-size: 13px; flex: 1; }
-#cl-close { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
-#cl-close:hover { color: #abb2bf; }
+.modal-title { color: #abb2bf; font-size: 13px; flex: 1; }
+.modal-close { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
+.modal-close:hover { color: #abb2bf; }
+
+/* ── Changelog modal ── */
+#cl-overlay .modal-box { width: 480px; }
 #cl-body { overflow-y: auto; padding: 12px 14px; }
 .cl-version-block { margin-bottom: 18px; }
 .cl-version-block:last-child { margin-bottom: 0; }
@@ -94,6 +97,42 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .cl-tag.new    { background: #1a3a26; color: #4ec97a; border: 1px solid #2a5a3a; }
 .cl-tag.fix    { background: #3a2020; color: #e06c75; border: 1px solid #5a3030; }
 .cl-tag.change { background: #2a2a10; color: #e5c07b; border: 1px solid #4a4a20; }
+
+/* ── Docs modal ── */
+#docs-overlay .modal-box { width: 720px; }
+#docs-layout { display: flex; flex: 1; min-height: 0; }
+#docs-sidebar {
+  width: 160px; flex-shrink: 0; overflow-y: auto;
+  border-right: 1px solid #2a2a2a; padding: 8px 0;
+}
+.docs-cmd-btn {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; color: #777;
+  font-family: Consolas, monospace; font-size: 12px;
+  padding: 5px 14px; cursor: pointer;
+}
+.docs-cmd-btn:hover { background: #252525; color: #abb2bf; }
+.docs-cmd-btn.active { background: #2a3a4a; color: #61afef; }
+#docs-content { flex: 1; overflow-y: auto; padding: 16px 18px; min-width: 0; }
+.docs-cmd-name { color: #61afef; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.docs-cmd-doc  { color: #888; font-size: 12px; margin-bottom: 16px; line-height: 1.6; }
+.docs-section-title { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+.docs-params-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+.docs-params-table th { color: #555; font-weight: normal; text-align: left; padding: 3px 8px 5px 0; border-bottom: 1px solid #2a2a2a; }
+.docs-params-table td { padding: 5px 8px 5px 0; color: #abb2bf; vertical-align: top; border-bottom: 1px solid #1e1e1e; }
+.docs-params-table td:first-child { color: #c678dd; width: 100px; }
+.docs-params-table td:nth-child(2) { color: #e5c07b; width: 80px; }
+.docs-param-enum { color: #666; font-size: 11px; margin-top: 2px; line-height: 1.5; }
+.docs-subtypes { }
+.docs-subtype-block { margin-bottom: 14px; border-left: 2px solid #2a3a4a; padding-left: 12px; }
+.docs-subtype-name { color: #98c379; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.docs-subtype-doc { color: #777; font-size: 11px; margin-bottom: 8px; }
+.docs-example {
+  background: #161616; border: 1px solid #2a2a2a; border-radius: 4px;
+  padding: 8px 12px; font-size: 12px; color: #abb2bf;
+  margin-bottom: 20px; white-space: pre;
+}
+.docs-no-params { color: #444; font-size: 12px; margin-bottom: 16px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -106,6 +145,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
         <button class="hdr-btn" id="btn-import">Import</button>
         <button class="hdr-btn" id="btn-export">Export</button>
+        <button class="hdr-btn" id="btn-docs">Docs</button>
         <button class="hdr-btn" id="btn-changelog">Changelog</button>
         <span style="color: #666;">made with claude</span>
       </span>
@@ -115,13 +155,27 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 </div>
 
 <!-- Changelog modal -->
-<div id="cl-overlay">
-  <div id="cl-modal">
-    <div id="cl-header">
-      <span id="cl-title">changelog</span>
-      <button id="cl-close" title="Close">✕</button>
+<div id="cl-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">changelog</span>
+      <button class="modal-close" id="cl-close" title="Close">&#x2715;</button>
     </div>
     <div id="cl-body"></div>
+  </div>
+</div>
+
+<!-- Docs modal -->
+<div id="docs-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">command reference</span>
+      <button class="modal-close" id="docs-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="docs-layout">
+      <div id="docs-sidebar"></div>
+      <div id="docs-content"><span style="color:#444;font-size:12px;">Select a command.</span></div>
+    </div>
   </div>
 </div>
 
@@ -149,7 +203,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   document.getElementById('btn-changelog').addEventListener('click', () => overlay.classList.add('open'));
   document.getElementById('cl-close').addEventListener('click', () => overlay.classList.remove('open'));
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.classList.remove('open'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { overlay.classList.remove('open'); document.getElementById('docs-overlay').classList.remove('open'); } });
 })();
 </script>
 <script>
@@ -162,7 +216,7 @@ require(['vs/editor/editor.main'], function () {
   function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
 
   const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
-  const BOT_SUB         = ['spawn','delete','alert','direct']
+  const BOT_SUB         = ['spawn','delete','alert','direct'];
   const TRIGGER_SUB     = ['add','addbutton','remove','color','set','activate','reset','create','delete','executable','whitelist'];
   const WORLD_SUB       = ['list','load'];
   const TIME_SUB        = ['start','stop','now','set'];
@@ -178,61 +232,64 @@ require(['vs/editor/editor.main'], function () {
   const MATERIALS       = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_clad10","brick_clad11","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_old2","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_tiles10","marble_tiles11","marble_tiles12","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
 
   const CMDS = {
-    create:      { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).' },
-    tween:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.' },
-    color:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0-255).' },
-    material:    { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.' },
-    reset:       { params: [], doc: 'Reset the entire scene to its default state.' },
-    explosion:   { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given type.' },
-    move:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves / rotates a given part.' },
-    size:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize given part with given parameters.' },
-    wait:        { params: [{name:'duration',type:'number'}], doc: 'Waits a set duration before proceeding.' },
-    ban:         { params: [{name:'player',type:'string'}], doc: 'Bans specified player.' },
-    kick:        { params: [{name:'player',type:'string'}], doc: 'Kicks specified player.' },
-    duplicate:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates specified part.' },
-    rename:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames specified object.' },
-    squad:       { params: [{name:'player',type:'string'},{name:'squad',type:'enum',values:SQUAD_TYPES}], doc: 'Sets squad for a specified player.' },
-    compounds:   { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables compounds.' },
-    revive:      { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables revive.' },
-    hud:         { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables the HUD.' },
-    firstperson: { params: [{name:'boolean',type:'enum',values:BOOL_LOCK}], doc: 'Locks or unlocks first person mode.' },
-    friendlyfire:{ params: [{name:'boolean',type:'enum',values:BOOL_FF}], doc: 'Enables, disables, or sets all-team friendly fire.' },
-    collision:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:COLLISION_TYPES}], doc: 'Changes collision attribute value.' },
-    teleport:    { params: [{name:'type',type:'enum',values:TELEPORT_TYPES},{name:'target',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports thing to specified location.' },
+    create:      { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).', example: 'create 1 part 10 0 5' },
+    tween:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.', example: 'tween 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 2.5 10 0 5 0 90 0' },
+    color:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0–255).', example: 'color 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 255 128 0' },
+    material:    { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.', example: 'material 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx brick_clad' },
+    reset:       { params: [], doc: 'Reset the entire scene to its default state.', example: 'reset' },
+    explosion:   { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given radius, damage and target type.', example: 'explosion 10 50 0 0 0 GroundVehicle' },
+    move:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves and/or rotates a given part to the specified position and rotation.', example: 'move 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 5 0 5 0 45 0' },
+    size:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize the given part with the given X, Y, Z scale values.', example: 'size 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 4 2 4' },
+    wait:        { params: [{name:'duration',type:'number'}], doc: 'Waits a set number of seconds before the next command executes.', example: 'wait 3' },
+    ban:         { params: [{name:'player',type:'string'}], doc: 'Bans the specified player from the server.', example: 'ban PlayerName' },
+    kick:        { params: [{name:'player',type:'string'}], doc: 'Kicks the specified player from the server.', example: 'kick PlayerName' },
+    duplicate:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates the specified part in the given world.', example: 'duplicate 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+    rename:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames the specified object.', example: 'rename 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx MyPart' },
+    squad:       { params: [{name:'player',type:'string'},{name:'squad',type:'enum',values:SQUAD_TYPES}], doc: 'Assigns a squad colour to the specified player.', example: 'squad PlayerName blue' },
+    compounds:   { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables compounds globally.', example: 'compounds enable' },
+    revive:      { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables the revive mechanic.', example: 'revive disable' },
+    hud:         { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Shows or hides the HUD for all players.', example: 'hud disable' },
+    firstperson: { params: [{name:'boolean',type:'enum',values:BOOL_LOCK}], doc: 'Locks or unlocks first-person camera mode.', example: 'firstperson lock' },
+    friendlyfire:{ params: [{name:'boolean',type:'enum',values:BOOL_FF}], doc: 'Enables, disables, or forces friendly fire for all teams.', example: 'friendlyfire enable' },
+    collision:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:COLLISION_TYPES}], doc: 'Changes the collision attribute of a part. 0 = off, 1–3 = various modes.', example: 'collision 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 0' },
+    teleport:    { params: [{name:'type',type:'enum',values:TELEPORT_TYPES},{name:'target',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports a player, squad, or all players to the specified position and rotation.', example: 'teleport player PlayerName 0 5 0 0 0 0' },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
       subtypes: {
-        add:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds trigger to specified part.' },
-        addbutton:  { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds button interact to specified part.' },
-        remove:     { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Removes trigger from specified part.' },
-        color:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Changes trigger hitbox color.' },
-        set:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Applies specified trigger to specified part.' },
-        activate:   { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Activates specified trigger.' },
-        reset:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Resets specified trigger.' },
-        create:     { params: [{name:'world',type:'number'},{name:'name',type:'string'}], doc: 'Creates a new trigger.' },
-        delete:     { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Deletes specified trigger.' },
-        executable: { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}], doc: 'Adds a command to specified line of a specified trigger.' },
-        whitelist:  { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Manages trigger whitelist.' },
+        add:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds a trigger to the specified part.' },
+        addbutton:  { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds a button interact to the specified part.' },
+        remove:     { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Removes the trigger from the specified part.' },
+        color:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Changes the trigger hitbox colour.' },
+        set:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Applies the specified trigger to the specified part.' },
+        activate:   { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Activates the specified trigger.' },
+        reset:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Resets the specified trigger.' },
+        create:     { params: [{name:'world',type:'number'},{name:'name',type:'string'}], doc: 'Creates a new named trigger.' },
+        delete:     { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Deletes the specified trigger.' },
+        executable: { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}], doc: 'Adds a command to the specified line of a trigger.' },
+        whitelist:  { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Manages the whitelist for the specified trigger.' },
       },
-      doc: 'Create, edit and add things to triggers.',
+      doc: 'Create, edit, and attach commands to triggers.',
+      example: 'trigger create 1 myTrigger\ntrigger add 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\ntrigger activate 1 myTrigger',
     },
     bot: {
       params: [{name:'subtype',type:'enum',values:BOT_SUB}],
       subtypes: {
         spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawns a bot at the specified location.' },
         delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
-        alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts all bots in the specified world.' },
-        direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position.' },
+        alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts or calms all bots in the specified world.' },
+        direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position using the given priority mode.' },
       },
-      doc: 'Spawn, delete and control bots.',
+      doc: 'Spawn, delete, and control bots.',
+      example: 'bot spawn 1 Guard 0 0 0\nbot direct xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx strong 10 0 5',
     },
     world: {
       params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
       subtypes: {
         list: { params: [], doc: 'Lists all available worlds.' },
-        load: { params: [{name:'savefile',type:'string'},{name:'world',type:'number'}], doc: 'Loads a world from a savefile.' },
+        load: { params: [{name:'savefile',type:'string'},{name:'world',type:'number'}], doc: 'Loads a world from the specified savefile into the given world slot.' },
       },
       doc: 'Load or list worlds.',
+      example: 'world list\nworld load mySave 2',
     },
     time: {
       params: [{name:'subtype',type:'enum',values:TIME_SUB}],
@@ -242,24 +299,114 @@ require(['vs/editor/editor.main'], function () {
         now:   { params: [], doc: 'Returns the current time.' },
         set:   { params: [{name:'time',type:'number'}], doc: 'Sets the time to a specific value.' },
       },
-      doc: 'Become a time traveller.',
+      doc: 'Control the in-game time cycle.',
+      example: 'time set 12\ntime start',
     },
     file: {
       params: [{name:'subtype',type:'enum',values:FILE_SUB}],
       subtypes: {
-        save:        { params: [{name:'name',type:'string'}], doc: 'Saves the current map.' },
-        load:        { params: [{name:'name',type:'string'}], doc: 'Loads a map file.' },
-        delete:      { params: [{name:'name',type:'string'}], doc: 'Deletes a map file.' },
-        loadcopy:    { params: [{name:'name',type:'string'}], doc: 'Loads a copy of a map file.' },
-        savecopy:    { params: [{name:'name',type:'string'}], doc: 'Saves a copy of the current map.' },
-        list:        { params: [], doc: 'Lists all available files.' },
-        savemodel:   { params: [{name:'name',type:'string'},{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Saves a part as a model.' },
-        deletemodel: { params: [{name:'name',type:'string'}], doc: 'Deletes a model file.' },
-        insertmodel: { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'r',type:'number'}], doc: 'Inserts a model into the world.' },
+        save:        { params: [{name:'name',type:'string'}], doc: 'Saves the current map with the given name.' },
+        load:        { params: [{name:'name',type:'string'}], doc: 'Loads the specified map file.' },
+        delete:      { params: [{name:'name',type:'string'}], doc: 'Deletes the specified map file.' },
+        loadcopy:    { params: [{name:'name',type:'string'}], doc: 'Loads a copy of the specified map file.' },
+        savecopy:    { params: [{name:'name',type:'string'}], doc: 'Saves a copy of the current map with the given name.' },
+        list:        { params: [], doc: 'Lists all available map files.' },
+        savemodel:   { params: [{name:'name',type:'string'},{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Saves the specified part as a named model.' },
+        deletemodel: { params: [{name:'name',type:'string'}], doc: 'Deletes the specified model file.' },
+        insertmodel: { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'r',type:'number'}], doc: 'Inserts a saved model into the world at the specified position and rotation.' },
       },
-      doc: 'Edit map and model files.',
+      doc: 'Save, load, and manage map and model files.',
+      example: 'file save myMap\nfile list\nfile insertmodel 1 myModel 0 0 0 0',
     },
   };
+
+  // ── Docs modal ──
+  (function initDocs() {
+    const overlay  = document.getElementById('docs-overlay');
+    const sidebar  = document.getElementById('docs-sidebar');
+    const content  = document.getElementById('docs-content');
+    let activeBtn  = null;
+
+    function typeColor(type) {
+      if (type === 'number')  return '#61afef';
+      if (type === 'uid')     return '#c678dd';
+      if (type === 'enum')    return '#e5c07b';
+      if (type === 'string')  return '#98c379';
+      if (type === 'command') return '#e06c75';
+      return '#abb2bf';
+    }
+
+    function renderParamsTable(params) {
+      if (!params.length) return '<p class="docs-no-params">No parameters.</p>';
+      let rows = params.map(p => {
+        let extra = '';
+        if (p.type === 'enum') extra = `<div class="docs-param-enum">${p.values.join(', ')}</div>`;
+        if (p.type === 'uid')  extra = `<div class="docs-param-enum">UUID or %variable</div>`;
+        const defStr = p.default !== undefined ? ` <span style="color:#4a4a4a">(default: ${p.default})</span>` : '';
+        return `<tr>
+          <td>${p.name}${defStr}</td>
+          <td style="color:${typeColor(p.type)}">${p.type}</td>
+          <td>${extra}</td>
+        </tr>`;
+      }).join('');
+      return `<table class="docs-params-table">
+        <thead><tr><th>parameter</th><th>type</th><th>values</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    function renderCmd(name, spec) {
+      let html = `<div class="docs-cmd-name">${name}</div>`;
+      html += `<div class="docs-cmd-doc">${spec.doc}</div>`;
+
+      if (spec.subtypes) {
+        html += `<div class="docs-section-title">subtypes</div>`;
+        html += `<div class="docs-subtypes">`;
+        for (const [subName, sub] of Object.entries(spec.subtypes)) {
+          const allParams = [...spec.params, ...(sub.params || [])];
+          html += `<div class="docs-subtype-block">`;
+          html += `<div class="docs-subtype-name">${name} ${subName}</div>`;
+          html += `<div class="docs-subtype-doc">${sub.doc}</div>`;
+          html += renderParamsTable(allParams);
+          html += `</div>`;
+        }
+        html += `</div>`;
+      } else {
+        html += `<div class="docs-section-title">parameters</div>`;
+        html += renderParamsTable(spec.params);
+      }
+
+      if (spec.example) {
+        html += `<div class="docs-section-title">example</div>`;
+        html += `<div class="docs-example">${spec.example}</div>`;
+      }
+
+      content.innerHTML = html;
+    }
+
+    Object.keys(CMDS).forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'docs-cmd-btn';
+      btn.textContent = name;
+      btn.addEventListener('click', () => {
+        if (activeBtn) activeBtn.classList.remove('active');
+        activeBtn = btn;
+        btn.classList.add('active');
+        renderCmd(name, CMDS[name]);
+      });
+      sidebar.appendChild(btn);
+    });
+
+    document.getElementById('btn-docs').addEventListener('click', () => {
+      overlay.classList.add('open');
+      if (!activeBtn) {
+        const first = sidebar.querySelector('.docs-cmd-btn');
+        if (first) first.click();
+      }
+    });
+    document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  })();
 
   monaco.languages.register({ id: LANG });
   monaco.languages.setMonarchTokensProvider(LANG, {
@@ -279,7 +426,6 @@ require(['vs/editor/editor.main'], function () {
   });
 
   function parseLine(line) {
-    // Strip inline comments before parsing
     const commentIdx = line.indexOf('//');
     const stripped = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
     const trimmed = stripped.trimStart();
@@ -301,7 +447,6 @@ require(['vs/editor/editor.main'], function () {
     const tokens = parseLine(line);
     if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
     const restCol = tokens[restTokenIdx].col;
-    // Strip comment from rest value too
     const rawRest = line.slice(restCol - 1);
     const commentIdx = rawRest.indexOf('//');
     const restVal = commentIdx >= 0 ? rawRest.slice(0, commentIdx).trimEnd() : rawRest;
@@ -425,7 +570,6 @@ require(['vs/editor/editor.main'], function () {
     provideCompletionItems(model, position) {
       const line = model.getLineContent(position.lineNumber);
       const textBefore = line.slice(0, position.column - 1);
-      // Don't suggest inside a comment
       const commentIdx = textBefore.indexOf('//');
       if (commentIdx >= 0) return { suggestions: [] };
       const rawTokensBefore = parseLine(textBefore);
@@ -469,7 +613,6 @@ require(['vs/editor/editor.main'], function () {
   monaco.languages.registerHoverProvider(LANG, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber);
-      // No hover inside comments
       const commentIdx = line.indexOf('//');
       if (commentIdx >= 0 && position.column > commentIdx) return null;
       const tokens = getTokens(line);
@@ -574,7 +717,6 @@ require(['vs/editor/editor.main'], function () {
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
-      // Skip pure comment lines and empty lines
       const trimmed = line.trimStart();
       if (trimmed.startsWith('//') || trimmed === '') continue;
       const tokens = getTokens(line);
