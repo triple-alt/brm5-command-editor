@@ -12,6 +12,7 @@ const CHANGELOG = [
     changes: [
       { type: "new", text: "Added spawn command." },
       { type: "change", text: "Added (hopefully) all props under 'propName' parameter of the spawn command." },
+      { type: "change", text: "Fixed 'ObjBig' being 'Obj'." },
     ]
   },
   {
@@ -218,7 +219,7 @@ require(['vs/editor/editor.main'], function () {
   const VAR_RE  = /^%[a-zA-Z_]\w*$/;
   function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
 
-  const VEHICLE_ENUM    = ['GroundVehicle','Motar','Obj','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
+  const VEHICLE_ENUM    = ['GroundVehicle','Motar','ObjBig','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
   const BOT_SUB         = ['spawn','delete','alert','direct'];
   const TRIGGER_SUB     = ['add','addbutton','remove','color','set','activate','reset','create','delete','executable','whitelist'];
   const WORLD_SUB       = ['list','load'];
