@@ -384,8 +384,8 @@ require(['vs/editor/editor.main'], function () {
         lunar:      { params: [{name:'cycle',type:'enum',values:['1','2','3','4','5','6','7','8']}], doc: 'Sets lunar cycle to either 1-8.' },
         set:        { params: [{name:'type',type:'enum',values:WEATHER_TYPE}], doc: 'Sets weather type.' },
       },
-      doc: 'Create, edit, and attach commands to triggers.',
-      example: 'trigger create 1 myTrigger\ntrigger add 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\ntrigger activate 1 myTrigger',
+      doc: 'Change weather and lunar options.',
+      example: 'weather set ClearSky\nweather lunar 2',
     },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
@@ -528,7 +528,7 @@ require(['vs/editor/editor.main'], function () {
     tokenizer: {
       root: [
         [/\/\/.*$/, 'comment'],
-        [/\b(create|tween|bot|color|spawn|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|bot|color|spawn|weather|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
