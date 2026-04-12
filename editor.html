@@ -11,7 +11,7 @@ const CHANGELOG = [
     date: "12/04/2025",
     changes: [
       { type: "new", text: "Added weather command." },
-      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing." },
+      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing/exporting" },
     ]
   },
   {
@@ -174,6 +174,51 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .import-choice-btn.primary { background: #1a3a4a; border-color: #61afef; color: #61afef; }
 .import-choice-btn.primary:hover { background: #1e4a5a; }
 
+/* Close warning dialog */
+#close-warn-overlay .modal-box { width: 340px; }
+#close-warn-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+#close-warn-body p { color: #888; font-size: 12px; line-height: 1.6; }
+#close-warn-tabname { color: #61afef; }
+.close-warn-btn-row { display: flex; gap: 8px; margin-top: 2px; }
+.close-warn-btn {
+  flex: 1; padding: 7px 10px; border-radius: 4px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 11px; border: 1px solid #444;
+  background: #252525; color: #abb2bf; transition: background 0.1s, border-color 0.1s;
+}
+.close-warn-btn:hover { background: #2e2e2e; border-color: #555; }
+.close-warn-btn.export-close { background: #1a3a4a; border-color: #61afef; color: #61afef; }
+.close-warn-btn.export-close:hover { background: #1e4a5a; }
+.close-warn-btn.danger { border-color: #5a2a2a; color: #e06c75; }
+.close-warn-btn.danger:hover { background: #2e1a1a; border-color: #e06c75; }
+
+/* Multi-export dialog */
+#multiexport-overlay .modal-box { width: 380px; }
+#multiexport-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 60vh; }
+.multiexport-select-row { display: flex; gap: 8px; margin-bottom: 2px; }
+.multiexport-select-btn {
+  background: none; border: 1px solid #333; color: #666;
+  font-family: Consolas, monospace; font-size: 11px; padding: 2px 8px;
+  cursor: pointer; border-radius: 3px;
+}
+.multiexport-select-btn:hover { color: #abb2bf; border-color: #555; }
+.multiexport-tab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 4px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.multiexport-tab-row:hover { background: #252525; }
+.multiexport-tab-row input[type=checkbox] { accent-color: #61afef; width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+.multiexport-tab-label { color: #abb2bf; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.multiexport-footer { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid #2a2a2a; flex-shrink: 0; }
+.multiexport-footer-btn {
+  flex: 1; padding: 7px 12px; border-radius: 4px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 12px; border: 1px solid #444;
+  background: #252525; color: #abb2bf; transition: background 0.1s;
+}
+.multiexport-footer-btn:hover { background: #2e2e2e; }
+.multiexport-footer-btn.primary { background: #1a3a4a; border-color: #61afef; color: #61afef; }
+.multiexport-footer-btn.primary:hover { background: #1e4a5a; }
+
 #cl-overlay .modal-box { width: 480px; }
 #cl-body { overflow-y: auto; padding: 12px 14px; }
 .cl-version-block { margin-bottom: 18px; }
@@ -262,6 +307,41 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   </div>
 </div>
 
+<!-- Close warning modal -->
+<div id="close-warn-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Unsaved file</span>
+      <button class="modal-close" id="close-warn-cancel">&#x2715;</button>
+    </div>
+    <div id="close-warn-body">
+      <p>Export <span id="close-warn-tabname"></span> before closing?</p>
+      <div class="close-warn-btn-row">
+        <button class="close-warn-btn export-close" id="close-warn-export-close">Export &amp; close</button>
+        <button class="close-warn-btn danger" id="close-warn-just-close">Close without exporting</button>
+      </div>
+      <div class="close-warn-btn-row">
+        <button class="close-warn-btn" id="close-warn-cancel2">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Multi-export modal -->
+<div id="multiexport-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:380px; max-height:70vh;">
+    <div class="modal-header">
+      <span class="modal-title">Export tabs</span>
+      <button class="modal-close" id="multiexport-close">&#x2715;</button>
+    </div>
+    <div id="multiexport-body"></div>
+    <div class="multiexport-footer">
+      <button class="multiexport-footer-btn" id="multiexport-cancel">Cancel</button>
+      <button class="multiexport-footer-btn primary" id="multiexport-do">Download selected</button>
+    </div>
+  </div>
+</div>
+
 <div id="cl-overlay" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">
@@ -314,6 +394,8 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     overlay.classList.remove('open');
     document.getElementById('docs-overlay').classList.remove('open');
     document.getElementById('import-overlay').classList.remove('open');
+    document.getElementById('close-warn-overlay').classList.remove('open');
+    document.getElementById('multiexport-overlay').classList.remove('open');
   }});
 })();
 </script>
@@ -566,9 +648,35 @@ require(['vs/editor/editor.main'], function () {
     validate(tab.model, editor);
   }
 
+  function exportTab(id) {
+    const tab = tabs[id];
+    if (!tab) return;
+    const blob = new Blob([tab.model.getValue()], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = tab.name + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  let pendingCloseId = null;
+
   function closeTab(id) {
     const ids = Object.keys(tabs);
     if (ids.length === 1) return; // keep at least one tab
+
+    const tab = tabs[id];
+    if (!tab) return;
+
+    // Show warning before closing
+    document.getElementById('close-warn-tabname').textContent = tab.name;
+    pendingCloseId = id;
+    document.getElementById('close-warn-overlay').classList.add('open');
+  }
+
+  function doCloseTab(id) {
+    const ids = Object.keys(tabs);
+    if (ids.length === 1) return;
 
     const tabEl = tabsList.querySelector(`[data-id="${id}"]`);
     if (tabEl) tabEl.remove();
@@ -582,6 +690,24 @@ require(['vs/editor/editor.main'], function () {
       if (remaining.length) switchTab(remaining[remaining.length - 1]);
     }
   }
+
+  // Close-warning modal handlers
+  document.getElementById('close-warn-export-close').addEventListener('click', () => {
+    if (pendingCloseId) { exportTab(pendingCloseId); doCloseTab(pendingCloseId); pendingCloseId = null; }
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+  document.getElementById('close-warn-just-close').addEventListener('click', () => {
+    if (pendingCloseId) { doCloseTab(pendingCloseId); pendingCloseId = null; }
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+  document.getElementById('close-warn-cancel').addEventListener('click', () => {
+    pendingCloseId = null;
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+  document.getElementById('close-warn-cancel2').addEventListener('click', () => {
+    pendingCloseId = null;
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
 
   function startRename(id, tabEl, nameEl) {
     const input = document.createElement('input');
@@ -982,68 +1108,142 @@ require(['vs/editor/editor.main'], function () {
   // ── New tab button ──
   document.getElementById('btn-new-tab').addEventListener('click', () => createTab());
 
-  // ── Export: uses tab name as filename ──
-  document.getElementById('btn-export').addEventListener('click', () => {
-    const tab = tabs[activeTabId];
-    if (!tab) return;
-    const blob = new Blob([tab.model.getValue()], { type: 'text/plain' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = tab.name + '.txt';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
+  // ── Multi-export modal ──
+  function openMultiExport() {
+    const body = document.getElementById('multiexport-body');
+    body.innerHTML = '';
 
-  // ── Import: ask new tab or override ──
-  let pendingImportContent = null;
-  let pendingImportName = null;
+    const ids = Object.keys(tabs);
+
+    // Select all / none row
+    const selRow = document.createElement('div');
+    selRow.className = 'multiexport-select-row';
+    const selAll = document.createElement('button');
+    selAll.className = 'multiexport-select-btn';
+    selAll.textContent = 'Select all';
+    const selNone = document.createElement('button');
+    selNone.className = 'multiexport-select-btn';
+    selNone.textContent = 'Select none';
+    selRow.appendChild(selAll);
+    selRow.appendChild(selNone);
+    body.appendChild(selRow);
+
+    ids.forEach(id => {
+      const tab = tabs[id];
+      const row = document.createElement('label');
+      row.className = 'multiexport-tab-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.dataset.id = id;
+      const lbl = document.createElement('span');
+      lbl.className = 'multiexport-tab-label';
+      lbl.textContent = tab.name + '.txt';
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      body.appendChild(row);
+    });
+
+    selAll.addEventListener('click', () => body.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = true));
+    selNone.addEventListener('click', () => body.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false));
+
+    document.getElementById('multiexport-overlay').classList.add('open');
+  }
+
+  document.getElementById('btn-export').addEventListener('click', openMultiExport);
+
+  document.getElementById('multiexport-do').addEventListener('click', () => {
+    const checked = document.getElementById('multiexport-body').querySelectorAll('input[type=checkbox]:checked');
+    checked.forEach(cb => exportTab(cb.dataset.id));
+    document.getElementById('multiexport-overlay').classList.remove('open');
+  });
+  document.getElementById('multiexport-close').addEventListener('click', () => document.getElementById('multiexport-overlay').classList.remove('open'));
+  document.getElementById('multiexport-cancel').addEventListener('click', () => document.getElementById('multiexport-overlay').classList.remove('open'));
+  document.getElementById('multiexport-overlay').addEventListener('click', e => { if (e.target === document.getElementById('multiexport-overlay')) document.getElementById('multiexport-overlay').classList.remove('open'); });
+
+  // ── Import: multiple files → each opens as new tab ──
+  let pendingImportQueue = [];
+  let pendingImportIdx = 0;
+
+  function showNextImport() {
+    if (pendingImportIdx >= pendingImportQueue.length) {
+      pendingImportQueue = [];
+      pendingImportIdx = 0;
+      document.getElementById('import-overlay').classList.remove('open');
+      return;
+    }
+    const item = pendingImportQueue[pendingImportIdx];
+    document.getElementById('import-filename').textContent = item.filename;
+    // If multiple files, hide "override" option — just open all as new tabs
+    const overrideBtn = document.getElementById('import-override');
+    overrideBtn.style.display = pendingImportQueue.length > 1 ? 'none' : '';
+    document.getElementById('import-overlay').classList.add('open');
+  }
 
   document.getElementById('btn-import').addEventListener('click', () => {
     const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.txt';
+    input.type = 'file'; input.accept = '.txt'; input.multiple = true;
     input.addEventListener('change', () => {
-      const file = input.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = e => {
-        pendingImportContent = e.target.result;
-        // Strip .txt extension for tab name
-        pendingImportName = file.name.replace(/\.txt$/i, '');
-        document.getElementById('import-filename').textContent = file.name;
-        document.getElementById('import-overlay').classList.add('open');
-      };
-      reader.readAsText(file);
+      const files = Array.from(input.files);
+      if (!files.length) return;
+      pendingImportQueue = [];
+      pendingImportIdx = 0;
+      let loaded = 0;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          pendingImportQueue.push({ filename: file.name, name: file.name.replace(/\.txt$/i, ''), content: e.target.result });
+          loaded++;
+          if (loaded === files.length) {
+            // Sort by original file order
+            pendingImportQueue.sort((a, b) => files.findIndex(f => f.name === a.filename) - files.findIndex(f => f.name === b.filename));
+            showNextImport();
+          }
+        };
+        reader.readAsText(file);
+      });
     });
     input.click();
   });
 
   document.getElementById('import-new-tab').addEventListener('click', () => {
-    if (pendingImportContent === null) return;
-    createTab(pendingImportName, pendingImportContent);
-    pendingImportContent = null;
-    pendingImportName = null;
-    document.getElementById('import-overlay').classList.remove('open');
+    if (pendingImportIdx < pendingImportQueue.length) {
+      const item = pendingImportQueue[pendingImportIdx];
+      createTab(item.name, item.content);
+      pendingImportIdx++;
+      showNextImport();
+    }
   });
 
   document.getElementById('import-override').addEventListener('click', () => {
-    if (pendingImportContent === null) return;
-    const tab = tabs[activeTabId];
-    if (tab) {
-      tab.model.setValue(pendingImportContent);
-      // Also rename tab to match file
-      tab.name = pendingImportName;
-      const tabEl = tabsList.querySelector(`[data-id="${activeTabId}"]`);
-      if (tabEl) tabEl.querySelector('.tab-name').textContent = pendingImportName;
-      editor.setPosition({ lineNumber: 1, column: 1 });
-      editor.focus();
+    if (pendingImportIdx < pendingImportQueue.length) {
+      const item = pendingImportQueue[pendingImportIdx];
+      const tab = tabs[activeTabId];
+      if (tab) {
+        tab.model.setValue(item.content);
+        tab.name = item.name;
+        const tabEl = tabsList.querySelector(`[data-id="${activeTabId}"]`);
+        if (tabEl) tabEl.querySelector('.tab-name').textContent = item.name;
+        editor.setPosition({ lineNumber: 1, column: 1 });
+        editor.focus();
+      }
+      pendingImportIdx++;
+      showNextImport();
     }
-    pendingImportContent = null;
-    pendingImportName = null;
-    document.getElementById('import-overlay').classList.remove('open');
   });
 
   document.getElementById('import-close').addEventListener('click', () => {
-    pendingImportContent = null;
+    pendingImportQueue = [];
+    pendingImportIdx = 0;
     document.getElementById('import-overlay').classList.remove('open');
+  });
+
+  document.getElementById('import-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('import-overlay')) {
+      pendingImportQueue = [];
+      pendingImportIdx = 0;
+      document.getElementById('import-overlay').classList.remove('open');
+    }
   });
 
   // ── Docs modal ──
@@ -1117,8 +1317,15 @@ require(['vs/editor/editor.main'], function () {
 
   // ── Create initial tab ──
   createTab('commands1', 'create 1 part 1 1 1');
-  // Reset counter so next tab is commands2
-  // (createTab already incremented to 1, so next will be 2 naturally)
+
+  // ── Warn on page refresh / close ──
+  window.addEventListener('beforeunload', (e) => {
+    const hasContent = Object.values(tabs).some(tab => tab.model.getValue().trim() !== '');
+    if (hasContent) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 });
 </script>
 </body>
