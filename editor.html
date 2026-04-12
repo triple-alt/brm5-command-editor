@@ -7,13 +7,14 @@
 <script>
 const CHANGELOG = [
   {
-    version: "Added weather command",
+    version: "Weather Command and QOL additions",
     date: "12/04/2025",
     changes: [
       { type: "new", text: "Added weather command." },
+      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing." },
     ]
   },
-    {
+  {
     version: "Added spawn command",
     date: "09/04/2025",
     changes: [
@@ -48,7 +49,64 @@ const CHANGELOG = [
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
-#editor-wrap { flex: 1; min-height: 0; }
+
+/* ── Tab bar ── */
+#tab-bar {
+  display: flex; align-items: stretch;
+  background: #111; border-bottom: 1px solid #2a2a2a;
+  height: 33px; flex-shrink: 0; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+#tab-bar::-webkit-scrollbar { height: 3px; }
+#tab-bar::-webkit-scrollbar-thumb { background: #333; }
+#tabs-list { display: flex; align-items: stretch; }
+.tab {
+  display: flex; align-items: center; gap: 0;
+  padding: 0; min-width: 90px; max-width: 180px;
+  background: #161616; border-right: 1px solid #2a2a2a;
+  cursor: pointer; position: relative; flex-shrink: 0;
+  font-family: Consolas, monospace; font-size: 12px;
+  color: #666; user-select: none;
+  transition: background 0.1s;
+}
+.tab:hover { background: #1e1e1e; color: #888; }
+.tab.active { background: #1a1a1a; color: #abb2bf; border-bottom: 1px solid #1a1a1a; margin-bottom: -1px; }
+.tab.active::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px; background: #61afef;
+}
+.tab-name {
+  flex: 1; padding: 0 8px 0 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 33px;
+}
+.tab-name-input {
+  flex: 1; background: #252525; border: 1px solid #61afef;
+  color: #abb2bf; font-family: Consolas, monospace; font-size: 12px;
+  padding: 2px 4px; outline: none; margin: 4px 4px 4px 8px;
+  border-radius: 2px; min-width: 0;
+}
+.tab-close {
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  color: #444; font-size: 13px; border-radius: 3px; margin-right: 3px; flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+.tab-close:hover { color: #abb2bf; background: #333; }
+.tab.active .tab-close { color: #666; }
+#btn-new-tab {
+  display: flex; align-items: center; justify-content: center;
+  width: 33px; height: 33px; flex-shrink: 0;
+  background: none; border: none; color: #555;
+  font-size: 18px; cursor: pointer; font-family: Consolas, monospace;
+  transition: color 0.15s, background 0.15s;
+}
+#btn-new-tab:hover { color: #abb2bf; background: #1e1e1e; }
+
+/* ── Editor area ── */
+#editor-wrap { flex: 1; min-height: 0; position: relative; }
+.editor-instance { position: absolute; inset: 0; }
+
+/* ── Error panel ── */
 #error-panel {
   height: 160px; background: #111; border-top: 1px solid #333;
   display: flex; flex-direction: column; overflow: hidden;
@@ -80,6 +138,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
 
+/* ── Modals ── */
 .modal-overlay {
   display: none; position: fixed; inset: 0;
   background: rgba(0,0,0,0.65); z-index: 9999;
@@ -99,6 +158,21 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .modal-title { color: #abb2bf; font-size: 13px; flex: 1; }
 .modal-close { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
 .modal-close:hover { color: #abb2bf; }
+
+/* Import dialog */
+#import-overlay .modal-box { width: 360px; }
+#import-body { padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+#import-body p { color: #888; font-size: 12px; line-height: 1.6; }
+#import-filename { color: #61afef; }
+.import-btn-row { display: flex; gap: 8px; margin-top: 4px; }
+.import-choice-btn {
+  flex: 1; padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 12px; border: 1px solid #444;
+  background: #252525; color: #abb2bf; transition: background 0.1s, border-color 0.1s;
+}
+.import-choice-btn:hover { background: #2e2e2e; border-color: #61afef; color: #61afef; }
+.import-choice-btn.primary { background: #1a3a4a; border-color: #61afef; color: #61afef; }
+.import-choice-btn.primary:hover { background: #1e4a5a; }
 
 #cl-overlay .modal-box { width: 480px; }
 #cl-body { overflow-y: auto; padding: 12px 14px; }
@@ -150,6 +224,10 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 </head>
 <body>
 <div id="app">
+  <div id="tab-bar">
+    <div id="tabs-list"></div>
+    <button id="btn-new-tab" title="New tab">+</button>
+  </div>
   <div id="editor-wrap"></div>
   <div id="error-panel">
     <div id="error-header">
@@ -164,6 +242,23 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       </span>
     </div>
     <div id="error-list"><div id="no-errors">no errors</div></div>
+  </div>
+</div>
+
+<!-- Import choice modal -->
+<div id="import-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Import file</span>
+      <button class="modal-close" id="import-close">&#x2715;</button>
+    </div>
+    <div id="import-body">
+      <p>Import <span id="import-filename"></span> into…</p>
+      <div class="import-btn-row">
+        <button class="import-choice-btn primary" id="import-new-tab">New tab</button>
+        <button class="import-choice-btn" id="import-override">Override current tab</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -192,6 +287,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
 <script>
+// ── Changelog ──
 (function() {
   const body = document.getElementById('cl-body');
   const overlay = document.getElementById('cl-overlay');
@@ -214,7 +310,11 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   document.getElementById('btn-changelog').addEventListener('click', () => overlay.classList.add('open'));
   document.getElementById('cl-close').addEventListener('click', () => overlay.classList.remove('open'));
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { overlay.classList.remove('open'); document.getElementById('docs-overlay').classList.remove('open'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') {
+    overlay.classList.remove('open');
+    document.getElementById('docs-overlay').classList.remove('open');
+    document.getElementById('import-overlay').classList.remove('open');
+  }});
 })();
 </script>
 <script>
@@ -232,7 +332,7 @@ require(['vs/editor/editor.main'], function () {
   const WORLD_SUB       = ['list','load'];
   const TIME_SUB        = ['start','stop','now','set'];
   const WEATHER_SUB     = ['lunar','set'];
-  const WEATHER_TYPE    = ['ClearSky','RonoClearSky','Overcast1','Overcast2','Overcast3','Fog1','Fog2','Fog3','Rain1','Rain2','Rain3','Storm1','Storm2','Storm3']
+  const WEATHER_TYPE    = ['ClearSky','RonoClearSky','Overcast1','Overcast2','Overcast3','Fog1','Fog2','Fog3','Rain1','Rain2','Rain3','Storm1','Storm2','Storm3'];
   const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','savemodel','deletemodel','insertmodel'];
   const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
   const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','isLooping'];
@@ -244,116 +344,7 @@ require(['vs/editor/editor.main'], function () {
   const BOOL_FF         = ['enable','disable','all'];
   const MATERIALS       = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_clad10","brick_clad11","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_old2","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_tiles10","marble_tiles11","marble_tiles12","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
 
-  const PROPS = [
-    // City buildings
-    "City1_Ext","City2_Ext","City2_Int","City3_Ext","City4_Ext","City5_Int","City6_Ext","City7_Int1","City7_Int2","City7_Int3","CityHospitalExt","Lighthouse1",
-    // Sochi buildings
-    "Soch1_Ext","Soch2_Ext","Soch3_Ext","Soch4_Ext","Soch5_Ext","Soch6_1Ext","Soch6_2Ext","Soch7_1Ext","Soch7_2Ext","Soch7_3Ext","Soch8_1Ext","Soch8_2Ext","Soch8_3Ext","Soch9_Ext","Soch9_Int",
-    // Industrial
-    "Crane2","Depot1_Int","Depot2_Int","DoUTower","Oil_1Ext","Oil_2Ext","PowerPylon1","Quarry1_Int","Quarry2_Ext","Quarry3_Ext","Quarry4_Int","Quarry5_Ext","QuarryPulley","Warehouse1_Ext","Warehouse2_Ext","Warehouse3_Int","Watchtower1","WaterTower1",
-    // Military
-    "Hangar1","Hangar2","Hangar3_Ext","Hangar3_Int","Hangar4_Int","Helipad1","Military10_Int","Military1_Ext","Military2_Ext","Military3_Ext","Military4_Ext","Military5_Ext","Military6_Int","Military7_Int","Military8_Int","Military9_Int",
-    // Village
-    "Garage1Red","Garage1White","Garage2Red","Garage2White","Garage3Red","Garage3White","Village10_1Ext","Village10_2Ext","Village10_3Ext","Village10_4Ext","Village11_1Ext","Village11_1Int","Village11_2Ext","Village11_2Int","Village12_Int","Village13_Ext","Village13_Int","Village1_1Ext","Village1_1Int","Village2_1Ext","Village2_1Int","Village3_1Ext","Village3_1Int","Village4_1Ext","Village4_2Ext","Village5_1Ext","Village5_2Ext","Village6_1Ext","Village6_2Ext","Village7_Int","Village8_Ext","Village8_Int","VillageChurch1Ext","VillageChurch2Ext","Windmill1",
-    // Special / Gov
-    "Ballroom","Boathouse","GovBuilding2","GovBuilding3","GovHouse","GovernorsHouse",
-    // USA / misc buildings
-    "CroffleHouse","MBGuns","Trailer1_1Destroyed","Trailer1_2Destroyed","Trailer2_1Destroyed","Trailer2_2","Trailer2_2Destroyed","USA1_1Int","USA1_2Int","USA1_3Int","USA2_Int","USA3_Int","USA4_Int","USA5_Int","USA_Mansion1","USA_Mansion2","WaterTower3","trailer1","trailer1_2","trailer2",
-    // Skyscrapers
-    "Skyscraper1","Skyscraper2","Skyscraper3","Skyscraper4","Skyscraper5",
-    // Town USA
-    "CellTower","Hangar5_Int","Hangar6_Int","Hangar7_Int","Hangar8_Int","Station1","USA10_Int","USA11_Int","USA12_Int","USA13_Int","USA14_Int","USA15_Int","USA16_Int","USA17_Int","USA6_Int","USA8_Int","USA9_Int",
-    // Gameplay
-    "CapturePoint",
-    // General props
-    "AmmoRefill","AntiAir","Armory","BreakableWindow","Doors","GroundSpawner","HQ","HeliSpawner","Ladders","MenuTablet","MessHall","VendingMachine",
-    // Lights
-    "BallLight","BallLightOff","BunkerLightOff","BunkerLightOn","CeilingLight","CeilingLightOff","CheapLight","ConeLight","ConeLightShadow","DoubleWallLight","DoubleWallLightOff","GasLanternOff","GasLanternOn","GeneratorLight","GeneratorLightOff","HangingLight1","HangingLight1Off","HangingLight2","HangingLight2Off","HeliLight","Houselight","Houselight2","HouselightOff","IndustrialLight","IndustrialLightOff","IndustrialLightTripod","IndustrialLightTripodOff","Lamp","Lamp2","Lamp2Off","LampOff","LanternTokyo","Lightblock1","Lightblock1_Shadow","MineLamp","MineLamp2","MineLampOff","NYCTrafficPole1Light","NYCTrafficPole1LightOff","NYCTrafficPole2","NYCTrafficPole2Off","NYCTrafficPole3","NYCTrafficPole3Off","Powerpole_light","Powerpole_light_small","Powerpole_light_transformer","SpotTower","StreetLamp","StreetLight","StreetLightNYC","StreetLightNYCDouble","StreetLightNYCDoubleOff","StreetLightNYCNLUnpack","StreetLightOld","StreetLightOld2","TincanStoveOff","TincanStoveOn","TrackLight_Holder","TrackLight_LightOff","TrackLight_LightOn","TrackLight_LightOnDouble","TrackLight_LightOnShadow","TrackLight_LightOnShadowDouble","TrackLight_Track","TrackLight_TrackLong","TrilightPole","TubeLight","TubeLightHalf","TubeLightOff","TubeLightRed","TubeLightWhite","WallLight","WallLightOff","candle","candleBright","candleOff","downlight","downlight2","downlight3","downlight3off","downlightoff","street_lamp_thai",
-    // Candles
-    "Candle1","Candle1Bright","Candle1Off","Candle2","Candle2Bright","Candle2Off","Candle3","Candle3Bright","Candle3Off","Candle4","Candle4Bright","Candle4Off","Candle5","Candle5Bright","Candle5Off","Candle6","Candle6Bright","Candle6Off","Candle7","Candle7Bright","Candle7Off",
-    // Light Sources - Bright area
-    "LS_Blue_Bright","LS_Blue_Bright_L","LS_Blue_Bright_XL","LS_Green_Bright","LS_Green_Bright_L","LS_Green_Bright_XL","LS_LightBlue_Bright","LS_LightBlue_Bright_L","LS_LightBlue_Bright_XL","LS_Orange_Bright","LS_Orange_Bright_L","LS_Orange_Bright_XL","LS_Pink_Bright","LS_Pink_Bright_L","LS_Pink_Bright_XL","LS_Purple_Bright","LS_Purple_Bright_L","LS_Purple_Bright_XL","LS_Red_Bright","LS_Red_Bright_L","LS_Red_Bright_XL","LS_White_Bright","LS_White_Bright_L","LS_White_Bright_XL","LS_Yellow_Bright","LS_Yellow_Bright_L","LS_Yellow_Bright_XL",
-    // Light Sources - Bright point
-    "LS_Blue_Bright_Point","LS_Blue_Bright_Point_L","LS_Blue_Bright_Point_XL","LS_Green_Bright_Point","LS_Green_Bright_Point_L","LS_Green_Bright_Point_XL","LS_LightBlue_Bright_Point","LS_LightBlue_Bright_Point_L","LS_LightBlue_Bright_Point_XL","LS_Orange_Bright_Point","LS_Orange_Bright_Point_L","LS_Orange_Bright_Point_XL","LS_Pink_Bright_Point","LS_Pink_Bright_Point_L","LS_Pink_Bright_Point_XL","LS_Purple_Bright_Point","LS_Purple_Bright_Point_L","LS_Purple_Bright_Point_XL","LS_Red_Bright_Point","LS_Red_Bright_Point_L","LS_Red_Bright_Point_XL","LS_White_Bright_Point","LS_White_Bright_Point_L","LS_White_Bright_Point_XL","LS_Yellow_Bright_Point","LS_Yellow_Bright_Point_L","LS_Yellow_Bright_Point_XL",
-    // Light Sources - Dim area
-    "LS_Blue_Dim","LS_Blue_Dim_L","LS_Blue_Dim_XL","LS_Green_Dim","LS_Green_Dim_L","LS_Green_Dim_XL","LS_LightBlue_Dim","LS_LightBlue_Dim_L","LS_LightBlue_Dim_XL","LS_Orange_Dim","LS_Orange_Dim_L","LS_Orange_Dim_XL","LS_Pink_Dim","LS_Pink_Dim_L","LS_Pink_Dim_XL","LS_Purple_Dim","LS_Purple_Dim_L","LS_Purple_Dim_XL","LS_Red_Dim","LS_Red_Dim_L","LS_Red_Dim_XL","LS_White_Dim","LS_White_Dim_L","LS_White_Dim_XL","LS_Yellow_Dim","LS_Yellow_Dim_L","LS_Yellow_Dim_XL",
-    // Light Sources - Dim point
-    "LS_Blue_Dim_Point","LS_Blue_Dim_Point_L","LS_Blue_Dim_Point_XL","LS_Green_Dim_Point","LS_Green_Dim_Point_L","LS_Green_Dim_Point_XL","LS_LightBlue_Dim_Point","LS_LightBlue_Dim_Point_L","LS_LightBlue_Dim_Point_XL","LS_Orange_Dim_Point","LS_Orange_Dim_Point_L","LS_Orange_Dim_Point_XL","LS_Pink_Dim_Point","LS_Pink_Dim_Point_L","LS_Pink_Dim_Point_XL","LS_Purple_Dim_Point","LS_Purple_Dim_Point_L","LS_Purple_Dim_Point_XL","LS_Red_Dim_Point","LS_Red_Dim_Point_L","LS_Red_Dim_Point_XL","LS_White_Dim_Point","LS_White_Dim_Point_L","LS_White_Dim_Point_XL","LS_Yellow_Dim_Point","LS_Yellow_Dim_Point_L","LS_Yellow_Dim_Point_XL",
-    // Fences
-    "ChainLink4x16","ChainLink4x4","ChainLink4x8","ChainLink8x16","ChainLink8x32","ChainLink8x8",
-    // Graffiti
-    "Graffiti1","Graffiti2","Graffiti2Small","Graffiti2Tiny","Graffiti3","Graffiti4","Graffiti4Small","Graffiti5","Graffiti5Tiny","Graffiti6","Graffiti7","Graffiti7Small","Graffiti8","Graffiti9","Graffiti9Small","Graffiti9Tiny","Grafiti10","Grafiti10Small","Grafiti11","Grafiti12","Grafiti13","Grafiti13Small","Grafiti13Tiny","Grafiti14","Grafiti14Small","Grafiti15","Grafiti15Small","Grafiti16","Grafiti16Small","Grafiti17","Grafiti17Small","Grafiti18","Grafiti18Black","Grafiti18Red","Grafiti18Yellow","Grafiti19","Grafiti20","Grafiti21","Grafiti22","Grafiti23","Grafiti24","Grafiti25","Grafiti26","Grafiti27","Grafiti28","Grafiti29","Grafiti30","Grafiti31","Grafiti32","Grafiti33","Grafiti34","Grafiti35","Grafiti36Sheepdog","Grafiti37Sheepdog","Grafiti38Sheepdog","Grafiti39Sheepdog","Grafiti40Sheepdog","Grafiti41","Grafiti42","Grafiti43","Grafiti44","Grafiti45",
-    // Ground decals
-    "Dirt_Ground_1","Dirt_Ground_2","Dirt_Ground_3","Newspaper_Ground_1","Newspaper_Ground_2","Oil_Ground_1","Oil_Ground_2","Trash_Ground_1","Trash_Ground_2","Trash_Ground_3","Trash_Ground_4","Trash_Ground_5",
-    // Ad panels
-    "AdJP1","AdJP2","AdJP3","AdJP4","AdJP5","AdJP6","AdJP7","AdJP8","AdJP9","AdJP10","AdJP11","AdJP12","AdJP13","AdJP14","AdJP15","AdJP16","AdJP17","AdJP18","AdJP19",
-    // Posters
-    "Poster1","Poster2","Poster3","Poster4","Poster5","Poster6","Poster7","Poster8","Poster9","Poster10","Poster11","Poster12","Poster13",
-    // Stains
-    "Stain4","Stain5","Stain5Small","Stain6","Stain6Small","Stain7","Stain7Small","Stain8","Stain9","Stain9Small","Stain10","Stain10Small","Stain11","Stain11Small","Stain12","Stain13","Stain13Brown","Stain13BrownSmall","Stain13Green","Stain13GreenSmall","Stain13Small","Stain13Snow","Stain13VeryWide","Stain13VeryWideBrown","Stain13VeryWideGreen","Stain13VeryWideSnow","Stain13Wide","Stain13Wide2BrownSmall","Stain13Wide2GreenSmall","Stain13Wide2Small","Stain13Wide2SnowSmall","Stain13Wide3BrownSmall","Stain13Wide3GreenSmall","Stain13Wide3Small","Stain13Wide3SnowSmall","Stain13WideBrown","Stain13WideBrownSmall","Stain13WideGreen","Stain13WideGreenSmall","Stain13WideSmall","Stain13WideSnow","Stain13WideSnowSmall",
-    // Emitters
-    "FireEmitter","SmokeEmitter",
-    // 3D Letters - digits
-    "0_","1_","2_","3_","4_","5_","6_","7_","8_","9_",
-    // 3D Letters - uppercase
-    "A_uppercase","B_uppercase","C_uppercase","D_uppercase","E_uppercase","F_uppercase","G_uppercase","H_uppercase","I_uppercase","J_uppercase","K_uppercase","L_uppercase","M_uppercase","N_uppercase","O_uppercase","P_uppercase","Q_uppercase","R_uppercase","S_uppercase","T_uppercase","U_uppercase","V_uppercase","W_uppercase","X_uppercase","Y_uppercase","Z_uppercase",
-    // 3D Letters - lowercase
-    "a_lowercase","b_lowercase","c_lowercase","d_lowercase","e_lowercase","f_lowercase","g_lowercase","h_lowercase","i_lowercase","j_lowercase","k_lowercase","l_lowercase","m_lowercase","n_lowercase","o_lowercase","p_lowercase","q_lowercase","r_lowercase","s_lowercase","t_lowercase","u_lowercase","v_lowercase","w_lowercase","x_lowercase","y_lowercase","z_lowercase",
-    // Crane parts
-    "Crane_Arm","Crane_Base","Crane_Middle","Crane_Top",
-    // Doors
-    "Door_ApartmentFrontDoor_1_ExtOnly","Door_ApartmentFrontDoor_1_WithInt","Door_ApartmentFrontDoor_2_ExtOnly","Door_ApartmentFrontDoor_2_WithInt","Door_Frame_Double","Door_Frame_Single","Door_Glass_Double_ExtOnly","Door_Glass_Double_Small_ExtOnly","Door_Glass_Double_Small_WithInt","Door_Glass_Double_Small_WithInt_L","Door_Glass_Double_Small_WithInt_L2","Door_Glass_Double_Small_WithInt_R","Door_Glass_Double_Small_WithInt_R2","Door_Glass_Double_WithInt","Door_Glass_Double_WithInt_L","Door_Glass_Double_WithInt_L2","Door_Glass_Double_WithInt_R","Door_Glass_Double_WithInt_R2","Door_Glass_Single_ExtOnly","Door_Glass_Single_Small_1_ExtOnly","Door_Glass_Single_Small_WithInt","Door_Glass_Single_Small_WithInt2","Door_Glass_Single_WithInt","Door_Glass_Single_WithInt2","Door_HouseFrontDoor_1_ExtOnly","Door_HouseFrontDoor_1_WithInt","Door_HouseFrontDoor_2_ExtOnly","Door_HouseFrontDoor_2_WithInt","Door_HouseFrontDoor_3_ExtOnly","Door_HouseFrontDoor_3_WithIntL","Door_HouseFrontDoor_3_WithIntR","Door_Modern_1_ExtOnly","Door_Modern_1_WithInt","Door_Modern_2_ExtOnly","Door_Office_1_ExtOnly_L","Door_Office_1_ExtOnly_R","Door_Office_1_WithInt","Door_Office_2_ExtOnly_L","Door_Office_2_ExtOnly_R","Door_Office_2_WithInt","Door_Office_2_WithInt_R","Door_Old_Double","Door_Old_Single","Door_Steel_ExtOnly","Door_Wood_1_ExtOnly","Door_Wood_1_WithInt","Door_Wood_2_ExtOnly","Door_Wood_2_WithInt","Door_Wood_3_ExtOnly","Door_Wood_3_WithInt","Pushdoor_WithInt",
-    // Killhouse
-    "Killhousedoor","Killhousewall","Killhousewindow","Stopper",
-    // Stairs
-    "StairRailWoodLong","StairRailWoodMed","StairRailWoodPlatform","StairRailWoodShort","StairRailWoodTop","Stairs1_End","Stairs1_EndWide","Stairs1_Long","Stairs1_LongWide","Stairs1_Medium","Stairs1_MediumWide","Stairs1_Short","Stairs1_ShortWide","Stairs1_Start","Stairs1_StartWide","Stairs2_End","Stairs2_EndWide","Stairs2_Long","Stairs2_LongWide","Stairs2_Medium","Stairs2_MediumWide","Stairs2_Platform","Stairs2_PlatformWide","Stairs2_Short","Stairs2_ShortWide","Stairs2_Start","Stairs2_StartWide",
-    // Architecture / interior
-    "Aircon2","Aircon2_ext","Aircon2_int","ElevatorCallButtons","ElevatorDoorBroken","ElevatorDoorClosed","ElevatorOpen","ElevatorShaftClimber","Escalator_Int_Prefab_1","Escalator_Int_Prefab_1_Thin","Escalator_Int_Prefab_2","Escalator_Int_Prefab_2_Thin","Escalator_Int_Prefab_3","Escalator_Int_Prefab_3_Thin","Escalator_Int_Prefab_4","Escalator_Int_Prefab_4_Thin","Escalator_Int_Prefab_5","Escalator_Int_Prefab_5_Thin","Escalator_Int_Prefab_6","Escalator_Int_Prefab_6_Thin","Escalator_Int_Prefab_7","Escalator_Int_Prefab_7_Thin","Generic_Awning","Generic_Garage_ExtOnly","Generic_Garage_WithInt","IBeam10","IBeam15","IBeam20","IBeam30","IBeam40","Model","RadiatorBig","RadiatorMed","RadiatorSmall","RoofAircon1","RoofAircon2","RoofAircon3","RoofAirconDuct1","RoofAirconDuct2","RoofAirconDuct3","RoofExit1","StairRailMetalBottom","StairRailMetalLong","StairRailMetalMed","StairRailMetalPlatform","StairRailMetalShort","StairRailMetalTop","StairRailWoodBottom",
-    // Wires
-    "Wire1","Wire2","Wire3",
-    // Vegetation - shrubs / plants
-    "ARB1","BigShrub1","BigShrub2","BigShrub3","Grass","Plant1","Plant2","Plant3","Rose1","Rose1_Frosty","Rose1_Wilted","Rose2","Rose2_Frosty","Rose2_Wilted","Sapling","Shrub1","Shrub2","Shrub3","Shrub4","Shrub5","Shrub6","Shrub7","Spruce","TropicalTree1","TropicalTree2","TropicalTree3","TropicalTree3_2","TropicalTreeSmall","Vines","Vines2","Vines3","Vines4","VinesAutumn1","VinesAutumn2","VinesAutumn3","VinesAutumn4","Willowherb2","Willowherb3","dbgrebig1","dbgrebig2","dbgrebig3","dbgremed1","dbgremed2","dbgremed3","dbgresma1","dbgresma2","dbgresma3","dbsnobig1",
-    // Vegetation - deciduous trees
-    "dbsnobig2","dbsnobig3","dbsnomed1","dbsnomed2","dbsnomed3","dbsnosma1","dbsnosma2","dbyelbig1","dbyelbig2","dbyelbig3","dbyelmed1","dbyelmed2","dbyelmed3","dbyelsma1","dbyelsma2","dbyelsma3","oradbbig1","oradbbig2","oradbbig3","oradbmed1","oradbmed2","oradbmed3","oradbsma1","oradbsma2","oradbsma3","orangedbbig1","orangedbbig2","orangedbbig3","orangedbmed1","orangedbmed2","orangedbmed3","orangedbsma1","orangedbsma2","orangedbsma3","reddbbig1","reddbbig2","reddbbig3","reddbmed1","reddbmed2","reddbmed3",
-    // Rocks
-    "Rock1","Rock2","Rock3","Rock4","Rock5","Rock6","Rock7","Rock8","Rock9",
-    // Trees
-    "ARB2","ARB3","ARB4","ARB5","ARB6","ARB7","ARB8","ARB9","ARB9Snow","ARB10","ARB10Snow","ARB11","ARB11Snow","ARB12","ARB12Snow","ARB13","ARB13Snnow","ARB16","ARB17","ARB18","ARB19","Aspen2","Aspen3","Aspen4","Aspen5","Aspen6","Aspen7","Aspen8","AspenSmall","Banana","Banana2","Palm1","Palm2","Palm3","Palm4","Tree1","Tree1orange","Tree1red","Tree1yellow","Tree2","Tree2orange","Tree2red","Tree3NYC","Tree3orange","Tree3red","Tree3yellow","Tree5","Tree5orange","Tree5red","Tree5yellow","TreeFour","TreeFourorange","TreeFoured","TreeFouryellow","yellow",
-    // General clutter / industrial props
-    "AirconRoofA","AirconRoofB","BarrelRack","Barreltap","BlackBarrel","BlueBarrel","Bouy1","Bouy2","BoxBridges1","BoxBridges2","BoxBridges3","BoxBridges4","BoxGlobex1","BoxGlobex2","BoxGlobex3","BoxGlobex4","BoxPacific1","BoxPacific2","BoxPacific3","BoxPacific4","BoxPallet1","BoxPallet2","BoxPlain1","BoxPlain2","BoxPlain3","BoxPlain4","BrickLarge","BrickMedium","BrickSmall","Cart_Mechanic_1_1","Cart_Mechanic_1_2","Cart_Mechanic_1_4","CinderLarge","CinderMedium","CinderSmall","ContainerBlue","ContainerGreen","ContainerGrey","ContainerRed","Crate","CrateSingle","Curb","Dolly1","Dump1","Dump2","GasTank","Generator","IBC","Ladder","Lathe","Logs1","Logs2","Logs3","Mill","Pallet2","Pickaxe","PipesFew","PipesMany","PortaPot","Produce1","QuarryLevel","QuarryLevelBucket","RailCrossClosed","RailCrossOpen","Rebarhuge1","Rebarhuge2","Rebarhuge3","Rebarhuge4","Rebarhuge5","Rebarhuge6","RoadBarricade","RuggedGenGreen","RuggedGenTan","Shovel","Sign1","Sign2","Sign3","Sign4","Sign5","Sign6","Sign7","Sign8","Sledge","Spool","StopSign","Supports1","Traffic_AnalogBoard_Off","Traffic_AnalogBoard_On","Traffic_DigitalBoard_Off","Traffic_DigitalBoard_On","Trolley1","Trolley2","WaterTank","WaterTower2","WeatherStat","Wheelbarrow","Windmill2","Winebarrel","WoodBarrel","WoodBig","WoodLarge","WoodSmall","WoodXL","YellowBarrel","barrier_water","cone","confence1","confence2","congate","congateopen","controlpanel1","controlpanel2","controlpanel3","drill","evac_sign","guncabinet2","hydrant","ladder_rusty","ladder_steel","ladder_wood","paint_roller","paintbucket_blue_big","paintbucket_blue_small","paintbucket_grey_small","paintbucket_orange_big","paintbucket_purple_small","paintbucket_yellow_big","rebarlarge1","rebarlarge2","rebarsmall1","rebarsmall2","road_barricade","roller_tray","saw","sawbench","screw_container","screwdriver1","screwdriver2","screwdriver3","screws_long1","screws_long2","screws_short1","screws_short2","sledgehammer","stepladder","toolbox","workbench",
-    // Debris / snow / ice
-    "Debris1","Debris2","Debris3","Debris4","Debris5","Debris6","Debris7","Debris8","Debris9","Debris10","Debris11","Debris12","Debris13","Debris14","Debris15","Debris16","Icicles1","Icicles2","Icicles3","SnowCornerIn1","SnowCornerIn2","SnowCornerIn3","SnowCornerIn4","SnowCornerOut1","SnowCornerOut2","SnowCornerOut3","SnowCornerOut4","SnowCornerOut5","SnowCornerOut6","SnowCornerOut7","SnowCornerOut8","SnowPile1","SnowPile2","SnowPile3","SnowPile4","SnowPile5","SnowPile6","SnowPile7","SnowPile8","SnowPile9","SnowPile10","SnowPile11","SnowPile12","SnowPile13","SnowPile14","SnowPile15","SnowPile16","SnowPile17","SnowPile18","SnowPile19","SnowPile20","SnowPile21","SnowPile22","SnowPile23","SnowPile24","SnowPile25","SnowPile26","SnowPile27","SnowWall1","SnowWall2","SnowWall3","SnowWall4","SnowWall5","SnowWall6","SnowWall7","SnowWall8","SnowWall9","SnowWall10","SnowWall11","SnowWall12","TrashCornerIn1","TrashCornerIn2","TrashCornerIn3","TrashCornerIn4","TrashCornerIn5","TrashCornerIn6","TrashCornerOut1","TrashCornerOut2","TrashCornerOut3","TrashCornerOut4","TrashPile1","TrashPile2","TrashPile3","TrashPile4","TrashPile5","TrashPile6","TrashPile7","TrashWall1","TrashWall2","TrashWall4","TrashWall5","TrashWall6","TrashWall7","TrashWall8","YuckCorner1","YuckCorner2","YuckCorner3","YuckCorner4","YuckCorner5","YuckCorner6","YuckCorner7","YuckCorner8","YuckPile1","YuckPile2","YuckPile3","YuckPile4","YuckStain1","YuckStain1Big","YuckStain1Huge","YuckStain1Tiny","YuckStain2","YuckStain2Big","YuckStain3","YuckStain3Big","YuckWall1","YuckWall2","YuckWall3","YuckWall4",
-    // Weapons / gear
-    "AI_AK","AI_APS","AI_DB","AI_KSVK","AI_MAKAROV","AI_MOSIN","AI_PKM","AI_PP19","AI_PPSH","AI_RPD","AI_RPK","AI_SAIGA","AI_SVD","AI_VZ","AK5C","AK74M","AKS74U","ASVAL","AUGA1","AUGA3","AWM","Ammo50","Ammo762","AmmoCrate","AmmoLong","C7A2","ComputerModern","ComputerOld","Deagle","FAL","Famas","G17","G36","Glasses1","Groza","HP","HandWeatherStat","HandheldRadio","Handset","Hat1","Hat2","Hecate","Helmet1","Helmet2","Jerrycan","KeyboardModern","KeyboardOld","L85","Laptop","M1014","M110","M16A2","M16A4","M17","M2010","M24","M4","M83Smoke","M9","MK17","MK18","MP5A4","MP7","Meds","Megaphone","Model75B","Monitor","MonitorBase","MonitorBaseShort","MonitorModern1","MonitorModern2","MonitorOld","MonitorWide","OTs-03","P90","PGM","PM","PP2000","Pack1","Pack2","RF416","Radio","RadioAssembly1","RadioAssembly2","RadioAssembly3","Rugged1","SCAR-L","SR-3MP","SVDS","Stgw07k","UMP45","USP","laptoprugged",
-    // Bathroom / blinds / fabric
-    "Banner_Museum_Var1","Banner_Museum_Var2","Bathtub_SetIn","Bathtub_Standing","Blind_Roller_Custom","Blind_Roller_Open","Blind_Roller_Slightly_Open","Blind_Venetian_Closed","Blind_Venetian_Slightly_Open","Curtain_Closed","Curtain_Open","Shower_Cubicle","Tap_Bathtub_Floor","Tap_Bathtub_Wall",
-    // Food / drink
-    "Fish1","Fish2","Fish3","GravBrew","Mug","canfood1pack","cannedfood1","cannedfood2","cannedfood2pack","cereal","cerealpack","goods1","goods1pack","goods2","goods2pack","goods3","goods3pack","goods4","goods4pack","juice1","juice1pack","juice2","juice2pack","juice3","juice3pack","toast","toastpack","water","waterpack",
-    // Military outdoor / fortification
-    "AirconDesert1","AirconDesert2","AirconDesert3","AirconDesert4","AirconForest1","AirconForest2","AirconForest3","AirconForest4","AirconSnow1","AirconSnow2","AirconSnow3","AirconSnow4","BigGun1","BigTent","BigTentL","BigTentR","BigTentRDoor","Canopy1","Canopy2","Canopy3","Canopy4","Canopy5","Canopy6","Canopy7","ConcreteBarrier1","ConcreteBarrier2","ConcreteWall","ConcreteWallDuplicate","ConcreteWallMany","ConcreteWallManyNoPost","ConcreteWallNoPost","ConcreteWallSingle","ConcreteWallSmallMany","ConcreteWallSmallSingle","ConcreteWalls","CreteBarricade","DeconTent1","DeconTent2","DeconTent3","DesertCanopy1","DesertCanopy2","DesertTent","Fence1Long","Fence1Med","Fence1Short","Fence2Long","Fence2Med","Fence2Short","Fence3Long","Fence3Med","Fence3Short","ForestCanopy1","ForestCanopy2","ForestCanopy3","ForestCanopy4","ForestTent","ForestTent2","Gun1","Hedgehog","HescDesertBundle","HescDesertFour","HescDesertSingle","HescDesertSmall","HescDesertTile","HescDesertTower","HescForestBundle","HescForestFour","HescForestSingle","HescForestSmall","HescForestTile","HescForestTower","HescSnowBundle","HescSnowFour","HescSnowSingle","HescSnowSmall","HescSnowTile","HescSnowTower","HescoNet","Hotdog_Cart","LargeConcreteBarrier","Overhead1","Overhead2","Overhead3","Overhead4","Overhead5","PatientRoller","Rapid_Deployment_Barrier_1","Rapid_Deployment_Barrier_2","Rapid_Deployment_Barrier_3","RoadGate1_Closed","RoadGate1_Open","SandbagDesert1","SandbagDesert2","SandbagDesert6","SandbagDesert7","SandbagDesertCurve","SandbagDesertCurveSlght","SandbagDesertDefault","SandbagDesertHut","SandbagDesertSmall","SandbagDesertTiny","SandbagDesertTinyLeft","SandbagDesertTinyRight","SandbagForest1","SandbagForest2","SandbagForest6","SandbagForest7","SandbagForestCurve","SandbagForestCurveSlght","SandbagForestDefault","SandbagForestHut","SandbagForestSmall","SandbagForestTiny","SandbagForestTinyLeft","SandbagForestTinyRight","SandbagsDesert3","SandbagsDesert4","SandbagsDesert5","SandbagsForest3","SandbagsForest4","SandbagsForest5","SmallConcreteBarrier","SnowCanopy1","SnowCanopy2","SnowCanopy3","SnowCanopy4","TankTrap1","TankTrap2","Tower","Tower2","TundraCanopy1","TundraCanopy2","TurretBase","TurretSnow","TurretTundra","WinterTent",
-    // Furniture / interior props
-    "ADS","Aircon","AmmoCan","AmmoCan2","AmmoCrates","Antena","Barricade","Bed1","Bed2","Bed3","Bed4","Bedroll1","Bedroll2","BedrollRolled","Bench1","Bench2","BenchOld","BigTrashbag_1","BigTrashbag_1Blue","BigTrashbag_1White","BigTrashbag_2","BigTrashbag_2Blue","BigTrashbag_2White","BigTrashbag_3","BigTrashbag_3Blue","BigTrashbag_3White","BigTrashbag_4","BigTrashbag_4Blue","BigTrashbag_4White","BigTrashbag_5","BigTrashbag_5Blue","BigTrashbag_5White","BigTrashbag_Pile1","BigTrashbag_Pile1Blue","BigTrashbag_Pile1White","BigTrashbag_Pile2","BigTrashbag_Pile2Blue","BigTrashbag_Pile2White","BigTrashbag_Pile3","BigTrashbag_Pile3Blue","BigTrashbag_Pile3White","BigTrashbag_Pile4","BigTrashbag_Pile4Blue","BigTrashbag_Pile4White","BiggerAnt","Bin","BunkBed","BusShelter",
-    // Cabinets
-    "CBand","CabinetHospitalClosed_1","CabinetHospitalClosed_2","CabinetHospitalClosed_3","CabinetHospitalClosed_4","CabinetHospitalClosed_5","CabinetHospitalClosed_6","CabinetHospitalClosed_7","CabinetHospitalClosed_8","CabinetHospitalOpen","CabinetHospitalOpen_3","CabinetHospitalOpen_4","CabinetHospitalOpen_5","CabinetHospitalOpen_6","CabinetHospitalOpen_8","CabinetMetalClosed_1","CabinetMetalClosed_2","CabinetMetalClosed_3","CabinetMetalClosed_4","CabinetMetalClosed_5","CabinetMetalClosed_6","CabinetMetalClosed_7","CabinetMetalClosed_8","CabinetMetalMicrowave","CabinetMetalOpen_1","CabinetMetalOpen_2","CabinetMetalOpen_3","CabinetMetalOpen_4","CabinetMetalOpen_5","CabinetMetalOpen_6","CabinetMetalOpen_7","CabinetMetalOpen_8","CabinetWoodClosed_1","CabinetWoodClosed_2","CabinetWoodClosed_3","CabinetWoodClosed_4","CabinetWoodClosed_5","CabinetWoodClosed_6","CabinetWoodClosed_7","CabinetWoodClosed_8","CabinetWoodMicrowave","CabinetWoodOpen_1","CabinetWoodOpen_2","CabinetWoodOpen_4","CabinetWoodOpen_5","CabinetWoodOpen_6","CabinetWoodOpen_7","CabinetWoodOpen_8",
-    // Interior furniture continued
-    "CallBox1","Cardboard_Box_L_1","Cardboard_Box_L_2","Cardboard_Box_L_3","Cardboard_Box_L_4","Cardboard_Box_M_1","Cardboard_Box_M_2","Cardboard_Box_M_3","Cardboard_Box_M_4","Cardboard_Box_S_1","Cardboard_Box_S_2","Cardboard_Box_S_3","Cardboard_Box_S_4","Cardboard_Box_XL_1","Cardboard_Box_XL_2","Cardboard_Box_XL_3","Cardboard_Box_XL_4","Cardboard_Box_XS_1","Cardboard_Box_XS_2","Cardboard_Box_XS_3","Cardboard_Box_XS_4","Cart1","Cases1","CeilingDuct3Way","CeilingDuct3WayDouble","CeilingDuct4Way","CeilingDuct4WayDouble","CeilingDuctCorner","CeilingDuctCornerDouble","CeilingDuctLong","CeilingDuctLongDouble","CeilingDuctMedium","CeilingDuctMediumDouble","CeilingDuctShort","CeilingDuctShortDouble","CeilingDuctVerticalCorner","CeilingDuctVerticalCornerDouble","Chair_Lounge_White","Chair_Outdoor","Chair_Outdoor2","Chair_Plastic_1","Chair_Plastic_2","Chair_Wooden_1","Chair_Wooden_2","Checkout_Alarm","Checkout_Alarm_Broken","Checkout_Counter","Checkout_Fence","Checkout_SelfServe","Chimney1","ChristmasTree","Clothesline2","CoffeeTable2","CoffeeTable3","CoffeeTable4","CoffeetableLarge","CommercialHood","Corkboard","Cot1","Cot1Blue","Cot1Green","Cot1Orange","Cot1Pink","CouchLarge","CouchSmall","Couch_Outdoor_Table","Cushion1_White","Cushion2_White","Desk1","Desk2","Desk4LeftIn","Desk4LeftIn_Looted","Desk4LeftOut","Desk4LeftOut_Looted","Desk4Out","Desk4Out_Looted","Desk4RightIn","Desk4RightIn_Looted","Desk4RightOut","Desk4RightOut_Looted","Desk4tIn","Desk4tIn_Looted","Desk5LeftIn","Desk5LeftIn_Looted","Desk5LeftOut","Desk5LeftOut_Looted","Desk5Out","Desk5Out_Looted","Desk5RightIn","Desk5RightIn_Looted","Desk5RightOut","Desk5RightOut_Looted","Desk5tIn","Desk5tIn_Looted","Dish","DoubleFridgeLooted1","DoubleFridgeLooted2","DoubleFridgeLootedDoor","DoubleFridgeRack","Drawer_1","Drawer_2","Drawer_3","Drawer_Modern","ElectricBox1","ElectricBox2","Exit_Sign","Explosives1","Explosives2","Explosives3","Explosives4","ExtCouch_Corner","ExtCouch_Tile1","ExtCouch_Tile2","FileCabinetShort","FileCabinetShort2","FileCabinetShortTriple","FileCabinetShortTriple2","FileCabinetTall","FileCabinetTall2","FileCabinetTallTriple","FileCabinetTallTriple2","FileCabinetTallTriple3","FileCabinetWideShort","FileCabinetWideShort2","FileCabinetWideTall","FileCabinetWideTall2","Firewood1","Firewood2","FoldingSign","FoodDisplay1Looted","FoodDisplay2Looted","FortFancy1","FortFancy2","FortFancy3","FortFancy4","Fridge","GreenBin","GunCabinet","Gunbench","HotelTrolley","LargeGunCase","LargeGunCase_Empty","LargeGunCase_Lid","LargeSafe","LargeSafeLooted","LongAmmoCan","LongAmmoCan_Snow","LongGunCase_Closed","LongGunCase_Empty","LuggageCase","Machinery1","Machinery2","Machinery3","Mailbox","MedGunCase","MedGunCase_Empty","MedGunCase_Lid","MedSafe","MedSafeLooted","MedicalCase","MedicalCase_Empty","MedicalCase_Lid","Medkit1","MeetingTable","Milcase1_L","Milcase1_S","Milcase1_Stack","Milcase2_L","Milcase2_S","Milcase2_Stack","Milcase3_L","Milcase3_S","Milcase3_Stack","NYCTrafficLightAttachLeft","NYCTrafficLightAttachOff","NYCTrafficLightAttachYellow","NYCTrafficLightHang","NYCTrafficLightHangLeft","NYCTrafficPole1","NYCTrafficPole4","NYCTrafficWalkButton","NYCTrafficWalkCorner","NYCTrafficWalkLeft","NYCTrafficWalkRight","OfficeCabinet","OfficeChair","OfficeDesk","OfficeDeskDouble","OfficePrinter","Outhouse1","Outhouse2",
-    // More furniture / outdoor props
-    "Oven1","ParkingMeter","ParkingMeter2","PatioChair","PatioTable","Peg","Pegboard","Picnic","Picnic1","PlantPot4_1","PlantPot4_2","PlantPot5_1","PlantPot5_2","PlantPot5_Full1","PlantPot5_Full2","PlantPot6_1","PlantPot6_2","PlantPot6_Full1","PlantPot6_Full2","Planter","Planter2","PlasticBox1","PlasticBox1Empty","PlasticTable","Plasticbox1Lid","Plasticbox2","Plasticbox2Empty","Plasticbox2Lid","Plasticbox3","Plasticbox3Empty","Plasticbox3Lid","Playground1","Playground2","Playground3","Postbox","RationBox","RationBox2","Register","SatDish","Servers","Shelf1","Shelve_Shop_Large1","Shelve_Shop_Med1","Shelve_Shop_Med2","Sink2","SmallGunCase_Closed","SmallGunCase_Empty","SmallSafe","SmallSafeLooted","SnowBox1","SnowBox2","SnowBox3","Sofa1","Sofa2","Stool2","Stove","Stringline_Clothes","TV","Table_Dinner","Table_Outdoor","Table_Outdoor2","Target1","Target2","Target3","Target4","Target5","Target6","Target7","Target8","Target9","Tent1","Tent2","Tent3","ThickAmmoCan","ThickAmmoCan_Snow","Trashbag_1","Trashbag_1Blue","Trashbag_1White","Trashbag_2","Trashbag_2Blue","Trashbag_2White","Trashbag_3","Trashbag_3Blue","Trashbag_3White","Trashbag_4","Trashbag_4Blue","Trashbag_4White","Trashbag_5","Trashbag_5Blue","Trashbag_5White","Trashbag_Pile1","Trashbag_Pile1Blue","Trashbag_Pile1White","Trashbag_Pile2","Trashbag_Pile2Blue","Trashbag_Pile3","Trashbag_Pile3Blue","Trashbag_Pile3White","Trashbag_Pile4","Trashbag_Pile4Blue","Trashbag_Pile4White","Trashbag_Pile5","Trashcan","Trashcan2_Body","Trashcan2_Lid","TraumaBag","Treadmill","TreadmillFolded","Trolley_Shopping","Umbrella1","Umbrella2","Umbrella3","Umbrella4","Uranium","UtilityBox","Vending1","Wardrobe","Wardrobe1Closed","Wardrobe1Open","Wardrobe2Closed","Wardrobe2Open","WaterDispenser","Water_Barrier","Weights","Weights1","Well","Whiteboard","WideAmmoCan","WideAmmoCan_Snow","Woodchair2","WoodenFence","WoodenGate","WoodenTable2","awning1","awning1green","awning1red","awning1yellow","awning2","awning2green","awning2red","awning2yellow","barstool1","barstool2","barstool3","bartable1",
-    // Kitchen / shop / retail props
-    "basketball_hoop","bathtub","board table","cabinet","cinemaprojector","cinemaseat","cinemaspeaker1","cinemaspeaker1small","cinemaspeaker2","cinemaspeaker2small","clothesrack","coat1","coat2","cooktop_rusty","cooktop_stainless","cooktop_white","couch3","couchchair","firebarrel","firebarreloff","foodbenchlarge1","foodbenchlarge2","foodbenchlarge3","foodbenchlarge4","foodbenchlarge5","foodbenchlarge6","foodbenchsmall1","foodbenchsmall2","foodbenchsmall3","foodbenchsmall4","foodbenchsmall5","foodbenchsmall6","foodtablelarge1","foodtablelarge2","foodtablelarge3","foodtablelarge4","foodtablelarge5","foodtablelarge6","foodtablesmall1","foodtablesmall2","foodtablesmall3","foodtablesmall4","foodtablesmall5","foodtablesmall6","fridge2","fridge_rusty","fridge_stainless","fridge_white","fryer","glassshelve","grill","guncabinet1","hanger","jacket1","jacket2","microwave_rusty","microwave_stainless","microwave_white","modern tv","office chair","pants1","pants2","picket1gate","picket1long","picket1med","picket1short","picket2gate","picket2long","picket2med","picket2short","plantpot1","plantpot2","plantpot3","poolseat","popcornmachine","rangehood_rusty","rangehood_stainless","rangehood_white","shelvelow","shelvemed1","shelvemed2","shelvetall","shirt1","shirt2","sign_cafe","sign_izakaya","sign_sushi","sink","sink_rusty","stainlessbench","tableround1","tableround2","tableround3","toilet","trafficlight_thai","tshirt1","tshirt2","tv","tv2","tv2off","tvoff","wep_cabinet_1","wep_cabinet_2","wep_cabinet_3","wep_cabinet_4",
-    // Hospital / medical
-    "Bed_Surgery","Cabinet_Lab","Cabinet_Morgue","Camera_CCTV","Cart_Computer","Cart_Lab","Cart_Surgery","Centrifuge_Lab","Chair_Rolling","Chamber_Climate_Lab_Closed","Chamber_Climate_Lab_Open","Chamber_Lab_Anaerobic","Curtain_Medical_Folded","Curtain_Medical_Open","Fridge_Lab_Closed","HospitalBed1","HospitalBed2","HospitalBed3","HospitalBed4","HospitalBed5","HospitalBed6","HospitalBedArm","HospitalCot1","HospitalCot2","HospitalCot3","Light_OR_Surgical","Microscope_Lab","ivbag","ivpole1",
-    // Vehicles - civilian Russian
-    "Boat","RowBoat","ladablue","ladablurust","ladagreen","ladagreenrust","ladaorange","ladaorangerust","ladawhite","ladawhiterust","ladayellow","ladayellowrust","uazblue","uazbluerust","uazgreen","uazgreenrust","uazred","uazredrust","uazwhite","uazwhiterust",
-    // Vehicles - military Russian
-    "Artilley","BMP2_Barrel","BMP2_Body1","BMP2_Full1","BMP2_Full2","BMP2_Kornet","BMP2_Turret1","BMP2_Turret2","BTR70","BTR70_1","BTR70_2","BTR70_3","MAZ_1","MAZ_2","MiG25","Radar","SA3","T72A_Barrel1","T72A_Barrel2","T72A_Body1","T72A_Body2","T72A_Full1","T72A_Full2","T72A_Turret1","T72A_Turret2","TankBodyForest","TankBodySnow","TankTurretForest","TankTurretSnow","TigrSpn","ruscop","ruscoprust","sputnikmissile","uazcop","uazcoprust",
-    // Vehicles - civilian USA
-    "Arctic","Arctic_Dirty","Bus_City_2","Cherry","CherryAmbulance_DirtyGeneric","CherryBus","CherryBus_Dirty","Cherry_Dirty","Essence","Essence_Dirty","Honduh","Prion","Semitruck1","Semitruck2","Trailer1","Trailer1Grav","Trailer1Rono","Trailer1White","Truck_Box","Zoobaru","Zoobaru_Dirty","posttruck","posttruckopen",
-    // Vehicles - military USA
-    "AGPU","BearCatNYC","CS_Front","CS_Mid","CS_Rear","CS_Seats","CS_Wing","CopCarNYC","CopCarNYC1","FMTVArmoredExt_D","FMTVArmoredExt_F","FMTVArmoredExt_G","FMTVArmoredExt_S","FMTVCanopyExt_F","FMTVCanopyInt_F","FMTVExt_D","FMTVExt_F","FMTVExt_G","FMTVExt_S","FMTVInt_F","HeliCrash1","Humvee2IntHatch_D","Humvee2IntHatch_F","Humvee2IntHatch_W","Humvee2Int_D","Humvee2Int_F","Humvee2Int_W","HumveeCanopy_F","HumveeExt_D","HumveeExt_F","HumveeExt_W","HumveeIntHatch_D","HumveeIntHatch_F","HumveeIntHatch_W","HumveeInt_D","HumveeInt_F","HumveeInt_W","HumveeOpen_F","M93A2_F","MRAP_Desert","StrykerExtGun_F","StrykerExt_D","StrykerExt_F","StrykerIntGun_F","StrykerInt_D","StrykerInt_F","StrykerTurret1","StrykerTurret2","StrykerTurret2D","UH60Folded","sheriff",
-    // Vehicles - construction
-    "Bulldozer","CopCarJP","ExcavatorBody","ExcavatorTracks",
-  ];
+  const PROPS = ["City1_Ext","City2_Ext","City2_Int","City3_Ext","City4_Ext","City5_Int","City6_Ext","City7_Int1","City7_Int2","City7_Int3","CityHospitalExt","Lighthouse1","Soch1_Ext","Soch2_Ext","Soch3_Ext","Soch4_Ext","Soch5_Ext","Soch6_1Ext","Soch6_2Ext","Soch7_1Ext","Soch7_2Ext","Soch7_3Ext","Soch8_1Ext","Soch8_2Ext","Soch8_3Ext","Soch9_Ext","Soch9_Int","Crane2","Depot1_Int","Depot2_Int","DoUTower","Oil_1Ext","Oil_2Ext","PowerPylon1","Quarry1_Int","Quarry2_Ext","Quarry3_Ext","Quarry4_Int","Quarry5_Ext","QuarryPulley","Warehouse1_Ext","Warehouse2_Ext","Warehouse3_Int","Watchtower1","WaterTower1","Hangar1","Hangar2","Hangar3_Ext","Hangar3_Int","Hangar4_Int","Helipad1","Military10_Int","Military1_Ext","Military2_Ext","Military3_Ext","Military4_Ext","Military5_Ext","Military6_Int","Military7_Int","Military8_Int","Military9_Int","Garage1Red","Garage1White","Garage2Red","Garage2White","Garage3Red","Garage3White","Village10_1Ext","Village10_2Ext","Village10_3Ext","Village10_4Ext","Village11_1Ext","Village11_1Int","Village11_2Ext","Village11_2Int","Village12_Int","Village13_Ext","Village13_Int","Village1_1Ext","Village1_1Int","Village2_1Ext","Village2_1Int","Village3_1Ext","Village3_1Int","Village4_1Ext","Village4_2Ext","Village5_1Ext","Village5_2Ext","Village6_1Ext","Village6_2Ext","Village7_Int","Village8_Ext","Village8_Int","VillageChurch1Ext","VillageChurch2Ext","Windmill1","Ballroom","Boathouse","GovBuilding2","GovBuilding3","GovHouse","GovernorsHouse","CroffleHouse","MBGuns","Trailer1_1Destroyed","Trailer1_2Destroyed","Trailer2_1Destroyed","Trailer2_2","Trailer2_2Destroyed","USA1_1Int","USA1_2Int","USA1_3Int","USA2_Int","USA3_Int","USA4_Int","USA5_Int","USA_Mansion1","USA_Mansion2","WaterTower3","trailer1","trailer1_2","trailer2","Skyscraper1","Skyscraper2","Skyscraper3","Skyscraper4","Skyscraper5","CellTower","Hangar5_Int","Hangar6_Int","Hangar7_Int","Hangar8_Int","Station1","USA10_Int","USA11_Int","USA12_Int","USA13_Int","USA14_Int","USA15_Int","USA16_Int","USA17_Int","USA6_Int","USA8_Int","USA9_Int","CapturePoint","AmmoRefill","AntiAir","Armory","BreakableWindow","Doors","GroundSpawner","HQ","HeliSpawner","Ladders","MenuTablet","MessHall","VendingMachine","BallLight","BallLightOff","BunkerLightOff","BunkerLightOn","CeilingLight","CeilingLightOff","CheapLight","ConeLight","ConeLightShadow","DoubleWallLight","DoubleWallLightOff","GasLanternOff","GasLanternOn","GeneratorLight","GeneratorLightOff","HangingLight1","HangingLight1Off","HangingLight2","HangingLight2Off","HeliLight","Houselight","Houselight2","HouselightOff","IndustrialLight","IndustrialLightOff","IndustrialLightTripod","IndustrialLightTripodOff","Lamp","Lamp2","Lamp2Off","LampOff","LanternTokyo","Lightblock1","Lightblock1_Shadow","MineLamp","MineLamp2","MineLampOff","NYCTrafficPole1Light","NYCTrafficPole1LightOff","NYCTrafficPole2","NYCTrafficPole2Off","NYCTrafficPole3","NYCTrafficPole3Off","Powerpole_light","Powerpole_light_small","Powerpole_light_transformer","SpotTower","StreetLamp","StreetLight","StreetLightNYC","StreetLightNYCDouble","StreetLightNYCDoubleOff","StreetLightNYCNLUnpack","StreetLightOld","StreetLightOld2","TincanStoveOff","TincanStoveOn","TrackLight_Holder","TrackLight_LightOff","TrackLight_LightOn","TrackLight_LightOnDouble","TrackLight_LightOnShadow","TrackLight_LightOnShadowDouble","TrackLight_Track","TrackLight_TrackLong","TrilightPole","TubeLight","TubeLightHalf","TubeLightOff","TubeLightRed","TubeLightWhite","WallLight","WallLightOff","candle","candleBright","candleOff","downlight","downlight2","downlight3","downlight3off","downlightoff","street_lamp_thai","Candle1","Candle1Bright","Candle1Off","Candle2","Candle2Bright","Candle2Off","Candle3","Candle3Bright","Candle3Off","Candle4","Candle4Bright","Candle4Off","Candle5","Candle5Bright","Candle5Off","Candle6","Candle6Bright","Candle6Off","Candle7","Candle7Bright","Candle7Off","LS_Blue_Bright","LS_Blue_Bright_L","LS_Blue_Bright_XL","LS_Green_Bright","LS_Green_Bright_L","LS_Green_Bright_XL","LS_LightBlue_Bright","LS_LightBlue_Bright_L","LS_LightBlue_Bright_XL","LS_Orange_Bright","LS_Orange_Bright_L","LS_Orange_Bright_XL","LS_Pink_Bright","LS_Pink_Bright_L","LS_Pink_Bright_XL","LS_Purple_Bright","LS_Purple_Bright_L","LS_Purple_Bright_XL","LS_Red_Bright","LS_Red_Bright_L","LS_Red_Bright_XL","LS_White_Bright","LS_White_Bright_L","LS_White_Bright_XL","LS_Yellow_Bright","LS_Yellow_Bright_L","LS_Yellow_Bright_XL","LS_Blue_Bright_Point","LS_Blue_Bright_Point_L","LS_Blue_Bright_Point_XL","LS_Green_Bright_Point","LS_Green_Bright_Point_L","LS_Green_Bright_Point_XL","LS_LightBlue_Bright_Point","LS_LightBlue_Bright_Point_L","LS_LightBlue_Bright_Point_XL","LS_Orange_Bright_Point","LS_Orange_Bright_Point_L","LS_Orange_Bright_Point_XL","LS_Pink_Bright_Point","LS_Pink_Bright_Point_L","LS_Pink_Bright_Point_XL","LS_Purple_Bright_Point","LS_Purple_Bright_Point_L","LS_Purple_Bright_Point_XL","LS_Red_Bright_Point","LS_Red_Bright_Point_L","LS_Red_Bright_Point_XL","LS_White_Bright_Point","LS_White_Bright_Point_L","LS_White_Bright_Point_XL","LS_Yellow_Bright_Point","LS_Yellow_Bright_Point_L","LS_Yellow_Bright_Point_XL","LS_Blue_Dim","LS_Blue_Dim_L","LS_Blue_Dim_XL","LS_Green_Dim","LS_Green_Dim_L","LS_Green_Dim_XL","LS_LightBlue_Dim","LS_LightBlue_Dim_L","LS_LightBlue_Dim_XL","LS_Orange_Dim","LS_Orange_Dim_L","LS_Orange_Dim_XL","LS_Pink_Dim","LS_Pink_Dim_L","LS_Pink_Dim_XL","LS_Purple_Dim","LS_Purple_Dim_L","LS_Purple_Dim_XL","LS_Red_Dim","LS_Red_Dim_L","LS_Red_Dim_XL","LS_White_Dim","LS_White_Dim_L","LS_White_Dim_XL","LS_Yellow_Dim","LS_Yellow_Dim_L","LS_Yellow_Dim_XL","LS_Blue_Dim_Point","LS_Blue_Dim_Point_L","LS_Blue_Dim_Point_XL","LS_Green_Dim_Point","LS_Green_Dim_Point_L","LS_Green_Dim_Point_XL","LS_LightBlue_Dim_Point","LS_LightBlue_Dim_Point_L","LS_LightBlue_Dim_Point_XL","LS_Orange_Dim_Point","LS_Orange_Dim_Point_L","LS_Orange_Dim_Point_XL","LS_Pink_Dim_Point","LS_Pink_Dim_Point_L","LS_Pink_Dim_Point_XL","LS_Purple_Dim_Point","LS_Purple_Dim_Point_L","LS_Purple_Dim_Point_XL","LS_Red_Dim_Point","LS_Red_Dim_Point_L","LS_Red_Dim_Point_XL","LS_White_Dim_Point","LS_White_Dim_Point_L","LS_White_Dim_Point_XL","LS_Yellow_Dim_Point","LS_Yellow_Dim_Point_L","LS_Yellow_Dim_Point_XL","ChainLink4x16","ChainLink4x4","ChainLink4x8","ChainLink8x16","ChainLink8x32","ChainLink8x8","Graffiti1","Graffiti2","Graffiti2Small","Graffiti2Tiny","Graffiti3","Graffiti4","Graffiti4Small","Graffiti5","Graffiti5Tiny","Graffiti6","Graffiti7","Graffiti7Small","Graffiti8","Graffiti9","Graffiti9Small","Graffiti9Tiny","Grafiti10","Grafiti10Small","Grafiti11","Grafiti12","Grafiti13","Grafiti13Small","Grafiti13Tiny","Grafiti14","Grafiti14Small","Grafiti15","Grafiti15Small","Grafiti16","Grafiti16Small","Grafiti17","Grafiti17Small","Grafiti18","Grafiti18Black","Grafiti18Red","Grafiti18Yellow","Grafiti19","Grafiti20","Grafiti21","Grafiti22","Grafiti23","Grafiti24","Grafiti25","Grafiti26","Grafiti27","Grafiti28","Grafiti29","Grafiti30","Grafiti31","Grafiti32","Grafiti33","Grafiti34","Grafiti35","Grafiti36Sheepdog","Grafiti37Sheepdog","Grafiti38Sheepdog","Grafiti39Sheepdog","Grafiti40Sheepdog","Grafiti41","Grafiti42","Grafiti43","Grafiti44","Grafiti45","Dirt_Ground_1","Dirt_Ground_2","Dirt_Ground_3","Newspaper_Ground_1","Newspaper_Ground_2","Oil_Ground_1","Oil_Ground_2","Trash_Ground_1","Trash_Ground_2","Trash_Ground_3","Trash_Ground_4","Trash_Ground_5","AdJP1","AdJP2","AdJP3","AdJP4","AdJP5","AdJP6","AdJP7","AdJP8","AdJP9","AdJP10","AdJP11","AdJP12","AdJP13","AdJP14","AdJP15","AdJP16","AdJP17","AdJP18","AdJP19","Poster1","Poster2","Poster3","Poster4","Poster5","Poster6","Poster7","Poster8","Poster9","Poster10","Poster11","Poster12","Poster13","Stain4","Stain5","Stain5Small","Stain6","Stain6Small","Stain7","Stain7Small","Stain8","Stain9","Stain9Small","Stain10","Stain10Small","Stain11","Stain11Small","Stain12","Stain13","Stain13Brown","Stain13BrownSmall","Stain13Green","Stain13GreenSmall","Stain13Small","Stain13Snow","Stain13VeryWide","Stain13VeryWideBrown","Stain13VeryWideGreen","Stain13VeryWideSnow","Stain13Wide","Stain13Wide2BrownSmall","Stain13Wide2GreenSmall","Stain13Wide2Small","Stain13Wide2SnowSmall","Stain13Wide3BrownSmall","Stain13Wide3GreenSmall","Stain13Wide3Small","Stain13Wide3SnowSmall","Stain13WideBrown","Stain13WideBrownSmall","Stain13WideGreen","Stain13WideGreenSmall","Stain13WideSmall","Stain13WideSnow","Stain13WideSnowSmall","FireEmitter","SmokeEmitter","0_","1_","2_","3_","4_","5_","6_","7_","8_","9_","A_uppercase","B_uppercase","C_uppercase","D_uppercase","E_uppercase","F_uppercase","G_uppercase","H_uppercase","I_uppercase","J_uppercase","K_uppercase","L_uppercase","M_uppercase","N_uppercase","O_uppercase","P_uppercase","Q_uppercase","R_uppercase","S_uppercase","T_uppercase","U_uppercase","V_uppercase","W_uppercase","X_uppercase","Y_uppercase","Z_uppercase","a_lowercase","b_lowercase","c_lowercase","d_lowercase","e_lowercase","f_lowercase","g_lowercase","h_lowercase","i_lowercase","j_lowercase","k_lowercase","l_lowercase","m_lowercase","n_lowercase","o_lowercase","p_lowercase","q_lowercase","r_lowercase","s_lowercase","t_lowercase","u_lowercase","v_lowercase","w_lowercase","x_lowercase","y_lowercase","z_lowercase","Crane_Arm","Crane_Base","Crane_Middle","Crane_Top","Door_ApartmentFrontDoor_1_ExtOnly","Door_ApartmentFrontDoor_1_WithInt","Door_ApartmentFrontDoor_2_ExtOnly","Door_ApartmentFrontDoor_2_WithInt","Door_Frame_Double","Door_Frame_Single","Door_Glass_Double_ExtOnly","Door_Glass_Double_Small_ExtOnly","Door_Glass_Double_Small_WithInt","Door_Glass_Double_Small_WithInt_L","Door_Glass_Double_Small_WithInt_L2","Door_Glass_Double_Small_WithInt_R","Door_Glass_Double_Small_WithInt_R2","Door_Glass_Double_WithInt","Door_Glass_Double_WithInt_L","Door_Glass_Double_WithInt_L2","Door_Glass_Double_WithInt_R","Door_Glass_Double_WithInt_R2","Door_Glass_Single_ExtOnly","Door_Glass_Single_Small_1_ExtOnly","Door_Glass_Single_Small_WithInt","Door_Glass_Single_Small_WithInt2","Door_Glass_Single_WithInt","Door_Glass_Single_WithInt2","Door_HouseFrontDoor_1_ExtOnly","Door_HouseFrontDoor_1_WithInt","Door_HouseFrontDoor_2_ExtOnly","Door_HouseFrontDoor_2_WithInt","Door_HouseFrontDoor_3_ExtOnly","Door_HouseFrontDoor_3_WithIntL","Door_HouseFrontDoor_3_WithIntR","Door_Modern_1_ExtOnly","Door_Modern_1_WithInt","Door_Modern_2_ExtOnly","Door_Office_1_ExtOnly_L","Door_Office_1_ExtOnly_R","Door_Office_1_WithInt","Door_Office_2_ExtOnly_L","Door_Office_2_ExtOnly_R","Door_Office_2_WithInt","Door_Office_2_WithInt_R","Door_Old_Double","Door_Old_Single","Door_Steel_ExtOnly","Door_Wood_1_ExtOnly","Door_Wood_1_WithInt","Door_Wood_2_ExtOnly","Door_Wood_2_WithInt","Door_Wood_3_ExtOnly","Door_Wood_3_WithInt","Pushdoor_WithInt","Killhousedoor","Killhousewall","Killhousewindow","Stopper","StairRailWoodLong","StairRailWoodMed","StairRailWoodPlatform","StairRailWoodShort","StairRailWoodTop","Stairs1_End","Stairs1_EndWide","Stairs1_Long","Stairs1_LongWide","Stairs1_Medium","Stairs1_MediumWide","Stairs1_Short","Stairs1_ShortWide","Stairs1_Start","Stairs1_StartWide","Stairs2_End","Stairs2_EndWide","Stairs2_Long","Stairs2_LongWide","Stairs2_Medium","Stairs2_MediumWide","Stairs2_Platform","Stairs2_PlatformWide","Stairs2_Short","Stairs2_ShortWide","Stairs2_Start","Stairs2_StartWide","Aircon2","Aircon2_ext","Aircon2_int","ElevatorCallButtons","ElevatorDoorBroken","ElevatorDoorClosed","ElevatorOpen","ElevatorShaftClimber","Escalator_Int_Prefab_1","Escalator_Int_Prefab_1_Thin","Escalator_Int_Prefab_2","Escalator_Int_Prefab_2_Thin","Escalator_Int_Prefab_3","Escalator_Int_Prefab_3_Thin","Escalator_Int_Prefab_4","Escalator_Int_Prefab_4_Thin","Escalator_Int_Prefab_5","Escalator_Int_Prefab_5_Thin","Escalator_Int_Prefab_6","Escalator_Int_Prefab_6_Thin","Escalator_Int_Prefab_7","Escalator_Int_Prefab_7_Thin","Generic_Awning","Generic_Garage_ExtOnly","Generic_Garage_WithInt","IBeam10","IBeam15","IBeam20","IBeam30","IBeam40","Model","RadiatorBig","RadiatorMed","RadiatorSmall","RoofAircon1","RoofAircon2","RoofAircon3","RoofAirconDuct1","RoofAirconDuct2","RoofAirconDuct3","RoofExit1","StairRailMetalBottom","StairRailMetalLong","StairRailMetalMed","StairRailMetalPlatform","StairRailMetalShort","StairRailMetalTop","StairRailWoodBottom","Wire1","Wire2","Wire3","ARB1","BigShrub1","BigShrub2","BigShrub3","Grass","Plant1","Plant2","Plant3","Rose1","Rose1_Frosty","Rose1_Wilted","Rose2","Rose2_Frosty","Rose2_Wilted","Sapling","Shrub1","Shrub2","Shrub3","Shrub4","Shrub5","Shrub6","Shrub7","Spruce","TropicalTree1","TropicalTree2","TropicalTree3","TropicalTree3_2","TropicalTreeSmall","Vines","Vines2","Vines3","Vines4","VinesAutumn1","VinesAutumn2","VinesAutumn3","VinesAutumn4","Willowherb2","Willowherb3","dbgrebig1","dbgrebig2","dbgrebig3","dbgremed1","dbgremed2","dbgremed3","dbgresma1","dbgresma2","dbgresma3","dbsnobig1","dbsnobig2","dbsnobig3","dbsnomed1","dbsnomed2","dbsnomed3","dbsnosma1","dbsnosma2","dbyelbig1","dbyelbig2","dbyelbig3","dbyelmed1","dbyelmed2","dbyelmed3","dbyelsma1","dbyelsma2","dbyelsma3","oradbbig1","oradbbig2","oradbbig3","oradbmed1","oradbmed2","oradbmed3","oradbsma1","oradbsma2","oradbsma3","orangedbbig1","orangedbbig2","orangedbbig3","orangedbmed1","orangedbmed2","orangedbmed3","orangedbsma1","orangedbsma2","orangedbsma3","reddbbig1","reddbbig2","reddbbig3","reddbmed1","reddbmed2","reddbmed3","Rock1","Rock2","Rock3","Rock4","Rock5","Rock6","Rock7","Rock8","Rock9","ARB2","ARB3","ARB4","ARB5","ARB6","ARB7","ARB8","ARB9","ARB9Snow","ARB10","ARB10Snow","ARB11","ARB11Snow","ARB12","ARB12Snow","ARB13","ARB13Snnow","ARB16","ARB17","ARB18","ARB19","Aspen2","Aspen3","Aspen4","Aspen5","Aspen6","Aspen7","Aspen8","AspenSmall","Banana","Banana2","Palm1","Palm2","Palm3","Palm4","Tree1","Tree1orange","Tree1red","Tree1yellow","Tree2","Tree2orange","Tree2red","Tree3NYC","Tree3orange","Tree3red","Tree3yellow","Tree5","Tree5orange","Tree5red","Tree5yellow","TreeFour","TreeFourorange","TreeFoured","TreeFouryellow","yellow","AirconRoofA","AirconRoofB","BarrelRack","Barreltap","BlackBarrel","BlueBarrel","Bouy1","Bouy2","BoxBridges1","BoxBridges2","BoxBridges3","BoxBridges4","BoxGlobex1","BoxGlobex2","BoxGlobex3","BoxGlobex4","BoxPacific1","BoxPacific2","BoxPacific3","BoxPacific4","BoxPallet1","BoxPallet2","BoxPlain1","BoxPlain2","BoxPlain3","BoxPlain4","BrickLarge","BrickMedium","BrickSmall","Cart_Mechanic_1_1","Cart_Mechanic_1_2","Cart_Mechanic_1_4","CinderLarge","CinderMedium","CinderSmall","ContainerBlue","ContainerGreen","ContainerGrey","ContainerRed","Crate","CrateSingle","Curb","Dolly1","Dump1","Dump2","GasTank","Generator","IBC","Ladder","Lathe","Logs1","Logs2","Logs3","Mill","Pallet2","Pickaxe","PipesFew","PipesMany","PortaPot","Produce1","QuarryLevel","QuarryLevelBucket","RailCrossClosed","RailCrossOpen","Rebarhuge1","Rebarhuge2","Rebarhuge3","Rebarhuge4","Rebarhuge5","Rebarhuge6","RoadBarricade","RuggedGenGreen","RuggedGenTan","Shovel","Sign1","Sign2","Sign3","Sign4","Sign5","Sign6","Sign7","Sign8","Sledge","Spool","StopSign","Supports1","Traffic_AnalogBoard_Off","Traffic_AnalogBoard_On","Traffic_DigitalBoard_Off","Traffic_DigitalBoard_On","Trolley1","Trolley2","WaterTank","WaterTower2","WeatherStat","Wheelbarrow","Windmill2","Winebarrel","WoodBarrel","WoodBig","WoodLarge","WoodSmall","WoodXL","YellowBarrel","barrier_water","cone","confence1","confence2","congate","congateopen","controlpanel1","controlpanel2","controlpanel3","drill","evac_sign","guncabinet2","hydrant","ladder_rusty","ladder_steel","ladder_wood","paint_roller","paintbucket_blue_big","paintbucket_blue_small","paintbucket_grey_small","paintbucket_orange_big","paintbucket_purple_small","paintbucket_yellow_big","rebarlarge1","rebarlarge2","rebarsmall1","rebarsmall2","road_barricade","roller_tray","saw","sawbench","screw_container","screwdriver1","screwdriver2","screwdriver3","screws_long1","screws_long2","screws_short1","screws_short2","sledgehammer","stepladder","toolbox","workbench","Debris1","Debris2","Debris3","Debris4","Debris5","Debris6","Debris7","Debris8","Debris9","Debris10","Debris11","Debris12","Debris13","Debris14","Debris15","Debris16","Icicles1","Icicles2","Icicles3","SnowCornerIn1","SnowCornerIn2","SnowCornerIn3","SnowCornerIn4","SnowCornerOut1","SnowCornerOut2","SnowCornerOut3","SnowCornerOut4","SnowCornerOut5","SnowCornerOut6","SnowCornerOut7","SnowCornerOut8","SnowPile1","SnowPile2","SnowPile3","SnowPile4","SnowPile5","SnowPile6","SnowPile7","SnowPile8","SnowPile9","SnowPile10","SnowPile11","SnowPile12","SnowPile13","SnowPile14","SnowPile15","SnowPile16","SnowPile17","SnowPile18","SnowPile19","SnowPile20","SnowPile21","SnowPile22","SnowPile23","SnowPile24","SnowPile25","SnowPile26","SnowPile27","SnowWall1","SnowWall2","SnowWall3","SnowWall4","SnowWall5","SnowWall6","SnowWall7","SnowWall8","SnowWall9","SnowWall10","SnowWall11","SnowWall12","TrashCornerIn1","TrashCornerIn2","TrashCornerIn3","TrashCornerIn4","TrashCornerIn5","TrashCornerIn6","TrashCornerOut1","TrashCornerOut2","TrashCornerOut3","TrashCornerOut4","TrashPile1","TrashPile2","TrashPile3","TrashPile4","TrashPile5","TrashPile6","TrashPile7","TrashWall1","TrashWall2","TrashWall4","TrashWall5","TrashWall6","TrashWall7","TrashWall8","YuckCorner1","YuckCorner2","YuckCorner3","YuckCorner4","YuckCorner5","YuckCorner6","YuckCorner7","YuckCorner8","YuckPile1","YuckPile2","YuckPile3","YuckPile4","YuckStain1","YuckStain1Big","YuckStain1Huge","YuckStain1Tiny","YuckStain2","YuckStain2Big","YuckStain3","YuckStain3Big","YuckWall1","YuckWall2","YuckWall3","YuckWall4","AI_AK","AI_APS","AI_DB","AI_KSVK","AI_MAKAROV","AI_MOSIN","AI_PKM","AI_PP19","AI_PPSH","AI_RPD","AI_RPK","AI_SAIGA","AI_SVD","AI_VZ","AK5C","AK74M","AKS74U","ASVAL","AUGA1","AUGA3","AWM","Ammo50","Ammo762","AmmoCrate","AmmoLong","C7A2","ComputerModern","ComputerOld","Deagle","FAL","Famas","G17","G36","Glasses1","Groza","HP","HandWeatherStat","HandheldRadio","Handset","Hat1","Hat2","Hecate","Helmet1","Helmet2","Jerrycan","KeyboardModern","KeyboardOld","L85","Laptop","M1014","M110","M16A2","M16A4","M17","M2010","M24","M4","M83Smoke","M9","MK17","MK18","MP5A4","MP7","Meds","Megaphone","Model75B","Monitor","MonitorBase","MonitorBaseShort","MonitorModern1","MonitorModern2","MonitorOld","MonitorWide","OTs-03","P90","PGM","PM","PP2000","Pack1","Pack2","RF416","Radio","RadioAssembly1","RadioAssembly2","RadioAssembly3","Rugged1","SCAR-L","SR-3MP","SVDS","Stgw07k","UMP45","USP","laptoprugged","Banner_Museum_Var1","Banner_Museum_Var2","Bathtub_SetIn","Bathtub_Standing","Blind_Roller_Custom","Blind_Roller_Open","Blind_Roller_Slightly_Open","Blind_Venetian_Closed","Blind_Venetian_Slightly_Open","Curtain_Closed","Curtain_Open","Shower_Cubicle","Tap_Bathtub_Floor","Tap_Bathtub_Wall","Fish1","Fish2","Fish3","GravBrew","Mug","canfood1pack","cannedfood1","cannedfood2","cannedfood2pack","cereal","cerealpack","goods1","goods1pack","goods2","goods2pack","goods3","goods3pack","goods4","goods4pack","juice1","juice1pack","juice2","juice2pack","juice3","juice3pack","toast","toastpack","water","waterpack","AirconDesert1","AirconDesert2","AirconDesert3","AirconDesert4","AirconForest1","AirconForest2","AirconForest3","AirconForest4","AirconSnow1","AirconSnow2","AirconSnow3","AirconSnow4","BigGun1","BigTent","BigTentL","BigTentR","BigTentRDoor","Canopy1","Canopy2","Canopy3","Canopy4","Canopy5","Canopy6","Canopy7","ConcreteBarrier1","ConcreteBarrier2","ConcreteWall","ConcreteWallDuplicate","ConcreteWallMany","ConcreteWallManyNoPost","ConcreteWallNoPost","ConcreteWallSingle","ConcreteWallSmallMany","ConcreteWallSmallSingle","ConcreteWalls","CreteBarricade","DeconTent1","DeconTent2","DeconTent3","DesertCanopy1","DesertCanopy2","DesertTent","Fence1Long","Fence1Med","Fence1Short","Fence2Long","Fence2Med","Fence2Short","Fence3Long","Fence3Med","Fence3Short","ForestCanopy1","ForestCanopy2","ForestCanopy3","ForestCanopy4","ForestTent","ForestTent2","Gun1","Hedgehog","HescDesertBundle","HescDesertFour","HescDesertSingle","HescDesertSmall","HescDesertTile","HescDesertTower","HescForestBundle","HescForestFour","HescForestSingle","HescForestSmall","HescForestTile","HescForestTower","HescSnowBundle","HescSnowFour","HescSnowSingle","HescSnowSmall","HescSnowTile","HescSnowTower","HescoNet","Hotdog_Cart","LargeConcreteBarrier","Overhead1","Overhead2","Overhead3","Overhead4","Overhead5","PatientRoller","Rapid_Deployment_Barrier_1","Rapid_Deployment_Barrier_2","Rapid_Deployment_Barrier_3","RoadGate1_Closed","RoadGate1_Open","SandbagDesert1","SandbagDesert2","SandbagDesert6","SandbagDesert7","SandbagDesertCurve","SandbagDesertCurveSlght","SandbagDesertDefault","SandbagDesertHut","SandbagDesertSmall","SandbagDesertTiny","SandbagDesertTinyLeft","SandbagDesertTinyRight","SandbagForest1","SandbagForest2","SandbagForest6","SandbagForest7","SandbagForestCurve","SandbagForestCurveSlght","SandbagForestDefault","SandbagForestHut","SandbagForestSmall","SandbagForestTiny","SandbagForestTinyLeft","SandbagForestTinyRight","SandbagsDesert3","SandbagsDesert4","SandbagsDesert5","SandbagsForest3","SandbagsForest4","SandbagsForest5","SmallConcreteBarrier","SnowCanopy1","SnowCanopy2","SnowCanopy3","SnowCanopy4","TankTrap1","TankTrap2","Tower","Tower2","TundraCanopy1","TundraCanopy2","TurretBase","TurretSnow","TurretTundra","WinterTent","ADS","Aircon","AmmoCan","AmmoCan2","AmmoCrates","Antena","Barricade","Bed1","Bed2","Bed3","Bed4","Bedroll1","Bedroll2","BedrollRolled","Bench1","Bench2","BenchOld","BigTrashbag_1","BigTrashbag_1Blue","BigTrashbag_1White","BigTrashbag_2","BigTrashbag_2Blue","BigTrashbag_2White","BigTrashbag_3","BigTrashbag_3Blue","BigTrashbag_3White","BigTrashbag_4","BigTrashbag_4Blue","BigTrashbag_4White","BigTrashbag_5","BigTrashbag_5Blue","BigTrashbag_5White","BigTrashbag_Pile1","BigTrashbag_Pile1Blue","BigTrashbag_Pile1White","BigTrashbag_Pile2","BigTrashbag_Pile2Blue","BigTrashbag_Pile2White","BigTrashbag_Pile3","BigTrashbag_Pile3Blue","BigTrashbag_Pile3White","BigTrashbag_Pile4","BigTrashbag_Pile4Blue","BigTrashbag_Pile4White","BiggerAnt","Bin","BunkBed","BusShelter","CBand","CabinetHospitalClosed_1","CabinetHospitalClosed_2","CabinetHospitalClosed_3","CabinetHospitalClosed_4","CabinetHospitalClosed_5","CabinetHospitalClosed_6","CabinetHospitalClosed_7","CabinetHospitalClosed_8","CabinetHospitalOpen","CabinetHospitalOpen_3","CabinetHospitalOpen_4","CabinetHospitalOpen_5","CabinetHospitalOpen_6","CabinetHospitalOpen_8","CabinetMetalClosed_1","CabinetMetalClosed_2","CabinetMetalClosed_3","CabinetMetalClosed_4","CabinetMetalClosed_5","CabinetMetalClosed_6","CabinetMetalClosed_7","CabinetMetalClosed_8","CabinetMetalMicrowave","CabinetMetalOpen_1","CabinetMetalOpen_2","CabinetMetalOpen_3","CabinetMetalOpen_4","CabinetMetalOpen_5","CabinetMetalOpen_6","CabinetMetalOpen_7","CabinetMetalOpen_8","CabinetWoodClosed_1","CabinetWoodClosed_2","CabinetWoodClosed_3","CabinetWoodClosed_4","CabinetWoodClosed_5","CabinetWoodClosed_6","CabinetWoodClosed_7","CabinetWoodClosed_8","CabinetWoodMicrowave","CabinetWoodOpen_1","CabinetWoodOpen_2","CabinetWoodOpen_4","CabinetWoodOpen_5","CabinetWoodOpen_6","CabinetWoodOpen_7","CabinetWoodOpen_8","CallBox1","Cardboard_Box_L_1","Cardboard_Box_L_2","Cardboard_Box_L_3","Cardboard_Box_L_4","Cardboard_Box_M_1","Cardboard_Box_M_2","Cardboard_Box_M_3","Cardboard_Box_M_4","Cardboard_Box_S_1","Cardboard_Box_S_2","Cardboard_Box_S_3","Cardboard_Box_S_4","Cardboard_Box_XL_1","Cardboard_Box_XL_2","Cardboard_Box_XL_3","Cardboard_Box_XL_4","Cardboard_Box_XS_1","Cardboard_Box_XS_2","Cardboard_Box_XS_3","Cardboard_Box_XS_4","Cart1","Cases1","CeilingDuct3Way","CeilingDuct3WayDouble","CeilingDuct4Way","CeilingDuct4WayDouble","CeilingDuctCorner","CeilingDuctCornerDouble","CeilingDuctLong","CeilingDuctLongDouble","CeilingDuctMedium","CeilingDuctMediumDouble","CeilingDuctShort","CeilingDuctShortDouble","CeilingDuctVerticalCorner","CeilingDuctVerticalCornerDouble","Chair_Lounge_White","Chair_Outdoor","Chair_Outdoor2","Chair_Plastic_1","Chair_Plastic_2","Chair_Wooden_1","Chair_Wooden_2","Checkout_Alarm","Checkout_Alarm_Broken","Checkout_Counter","Checkout_Fence","Checkout_SelfServe","Chimney1","ChristmasTree","Clothesline2","CoffeeTable2","CoffeeTable3","CoffeeTable4","CoffeetableLarge","CommercialHood","Corkboard","Cot1","Cot1Blue","Cot1Green","Cot1Orange","Cot1Pink","CouchLarge","CouchSmall","Couch_Outdoor_Table","Cushion1_White","Cushion2_White","Desk1","Desk2","Desk4LeftIn","Desk4LeftIn_Looted","Desk4LeftOut","Desk4LeftOut_Looted","Desk4Out","Desk4Out_Looted","Desk4RightIn","Desk4RightIn_Looted","Desk4RightOut","Desk4RightOut_Looted","Desk4tIn","Desk4tIn_Looted","Desk5LeftIn","Desk5LeftIn_Looted","Desk5LeftOut","Desk5LeftOut_Looted","Desk5Out","Desk5Out_Looted","Desk5RightIn","Desk5RightIn_Looted","Desk5RightOut","Desk5RightOut_Looted","Desk5tIn","Desk5tIn_Looted","Dish","DoubleFridgeLooted1","DoubleFridgeLooted2","DoubleFridgeLootedDoor","DoubleFridgeRack","Drawer_1","Drawer_2","Drawer_3","Drawer_Modern","ElectricBox1","ElectricBox2","Exit_Sign","Explosives1","Explosives2","Explosives3","Explosives4","ExtCouch_Corner","ExtCouch_Tile1","ExtCouch_Tile2","FileCabinetShort","FileCabinetShort2","FileCabinetShortTriple","FileCabinetShortTriple2","FileCabinetTall","FileCabinetTall2","FileCabinetTallTriple","FileCabinetTallTriple2","FileCabinetTallTriple3","FileCabinetWideShort","FileCabinetWideShort2","FileCabinetWideTall","FileCabinetWideTall2","Firewood1","Firewood2","FoldingSign","FoodDisplay1Looted","FoodDisplay2Looted","FortFancy1","FortFancy2","FortFancy3","FortFancy4","Fridge","GreenBin","GunCabinet","Gunbench","HotelTrolley","LargeGunCase","LargeGunCase_Empty","LargeGunCase_Lid","LargeSafe","LargeSafeLooted","LongAmmoCan","LongAmmoCan_Snow","LongGunCase_Closed","LongGunCase_Empty","LuggageCase","Machinery1","Machinery2","Machinery3","Mailbox","MedGunCase","MedGunCase_Empty","MedGunCase_Lid","MedSafe","MedSafeLooted","MedicalCase","MedicalCase_Empty","MedicalCase_Lid","Medkit1","MeetingTable","Milcase1_L","Milcase1_S","Milcase1_Stack","Milcase2_L","Milcase2_S","Milcase2_Stack","Milcase3_L","Milcase3_S","Milcase3_Stack","NYCTrafficLightAttachLeft","NYCTrafficLightAttachOff","NYCTrafficLightAttachYellow","NYCTrafficLightHang","NYCTrafficLightHangLeft","NYCTrafficPole1","NYCTrafficPole4","NYCTrafficWalkButton","NYCTrafficWalkCorner","NYCTrafficWalkLeft","NYCTrafficWalkRight","OfficeCabinet","OfficeChair","OfficeDesk","OfficeDeskDouble","OfficePrinter","Outhouse1","Outhouse2","Oven1","ParkingMeter","ParkingMeter2","PatioChair","PatioTable","Peg","Pegboard","Picnic","Picnic1","PlantPot4_1","PlantPot4_2","PlantPot5_1","PlantPot5_2","PlantPot5_Full1","PlantPot5_Full2","PlantPot6_1","PlantPot6_2","PlantPot6_Full1","PlantPot6_Full2","Planter","Planter2","PlasticBox1","PlasticBox1Empty","PlasticTable","Plasticbox1Lid","Plasticbox2","Plasticbox2Empty","Plasticbox2Lid","Plasticbox3","Plasticbox3Empty","Plasticbox3Lid","Playground1","Playground2","Playground3","Postbox","RationBox","RationBox2","Register","SatDish","Servers","Shelf1","Shelve_Shop_Large1","Shelve_Shop_Med1","Shelve_Shop_Med2","Sink2","SmallGunCase_Closed","SmallGunCase_Empty","SmallSafe","SmallSafeLooted","SnowBox1","SnowBox2","SnowBox3","Sofa1","Sofa2","Stool2","Stove","Stringline_Clothes","TV","Table_Dinner","Table_Outdoor","Table_Outdoor2","Target1","Target2","Target3","Target4","Target5","Target6","Target7","Target8","Target9","Tent1","Tent2","Tent3","ThickAmmoCan","ThickAmmoCan_Snow","Trashbag_1","Trashbag_1Blue","Trashbag_1White","Trashbag_2","Trashbag_2Blue","Trashbag_2White","Trashbag_3","Trashbag_3Blue","Trashbag_3White","Trashbag_4","Trashbag_4Blue","Trashbag_4White","Trashbag_5","Trashbag_5Blue","Trashbag_5White","Trashbag_Pile1","Trashbag_Pile1Blue","Trashbag_Pile1White","Trashbag_Pile2","Trashbag_Pile2Blue","Trashbag_Pile3","Trashbag_Pile3Blue","Trashbag_Pile3White","Trashbag_Pile4","Trashbag_Pile4Blue","Trashbag_Pile4White","Trashbag_Pile5","Trashcan","Trashcan2_Body","Trashcan2_Lid","TraumaBag","Treadmill","TreadmillFolded","Trolley_Shopping","Umbrella1","Umbrella2","Umbrella3","Umbrella4","Uranium","UtilityBox","Vending1","Wardrobe","Wardrobe1Closed","Wardrobe1Open","Wardrobe2Closed","Wardrobe2Open","WaterDispenser","Water_Barrier","Weights","Weights1","Well","Whiteboard","WideAmmoCan","WideAmmoCan_Snow","Woodchair2","WoodenFence","WoodenGate","WoodenTable2","awning1","awning1green","awning1red","awning1yellow","awning2","awning2green","awning2red","awning2yellow","barstool1","barstool2","barstool3","bartable1","basketball_hoop","bathtub","cabinet","cinemaprojector","cinemaseat","cinemaspeaker1","cinemaspeaker1small","cinemaspeaker2","cinemaspeaker2small","clothesrack","coat1","coat2","cooktop_rusty","cooktop_stainless","cooktop_white","couch3","couchchair","firebarrel","firebarreloff","foodbenchlarge1","foodbenchlarge2","foodbenchlarge3","foodbenchlarge4","foodbenchlarge5","foodbenchlarge6","foodbenchsmall1","foodbenchsmall2","foodbenchsmall3","foodbenchsmall4","foodbenchsmall5","foodbenchsmall6","foodtablelarge1","foodtablelarge2","foodtablelarge3","foodtablelarge4","foodtablelarge5","foodtablelarge6","foodtablesmall1","foodtablesmall2","foodtablesmall3","foodtablesmall4","foodtablesmall5","foodtablesmall6","fridge2","fridge_rusty","fridge_stainless","fridge_white","fryer","glassshelve","grill","guncabinet1","hanger","jacket1","jacket2","microwave_rusty","microwave_stainless","microwave_white","office chair","pants1","pants2","picket1gate","picket1long","picket1med","picket1short","picket2gate","picket2long","picket2med","picket2short","plantpot1","plantpot2","plantpot3","poolseat","popcornmachine","rangehood_rusty","rangehood_stainless","rangehood_white","shelvelow","shelvemed1","shelvemed2","shelvetall","shirt1","shirt2","sign_cafe","sign_izakaya","sign_sushi","sink","sink_rusty","stainlessbench","tableround1","tableround2","tableround3","toilet","trafficlight_thai","tshirt1","tshirt2","tv","tv2","tv2off","tvoff","wep_cabinet_1","wep_cabinet_2","wep_cabinet_3","wep_cabinet_4","Bed_Surgery","Cabinet_Lab","Cabinet_Morgue","Camera_CCTV","Cart_Computer","Cart_Lab","Cart_Surgery","Centrifuge_Lab","Chair_Rolling","Chamber_Climate_Lab_Closed","Chamber_Climate_Lab_Open","Chamber_Lab_Anaerobic","Curtain_Medical_Folded","Curtain_Medical_Open","Fridge_Lab_Closed","HospitalBed1","HospitalBed2","HospitalBed3","HospitalBed4","HospitalBed5","HospitalBed6","HospitalBedArm","HospitalCot1","HospitalCot2","HospitalCot3","Light_OR_Surgical","Microscope_Lab","ivbag","ivpole1","Boat","RowBoat","ladablue","ladablurust","ladagreen","ladagreenrust","ladaorange","ladaorangerust","ladawhite","ladawhiterust","ladayellow","ladayellowrust","uazblue","uazbluerust","uazgreen","uazgreenrust","uazred","uazredrust","uazwhite","uazwhiterust","Artilley","BMP2_Barrel","BMP2_Body1","BMP2_Full1","BMP2_Full2","BMP2_Kornet","BMP2_Turret1","BMP2_Turret2","BTR70","BTR70_1","BTR70_2","BTR70_3","MAZ_1","MAZ_2","MiG25","Radar","SA3","T72A_Barrel1","T72A_Barrel2","T72A_Body1","T72A_Body2","T72A_Full1","T72A_Full2","T72A_Turret1","T72A_Turret2","TankBodyForest","TankBodySnow","TankTurretForest","TankTurretSnow","TigrSpn","ruscop","ruscoprust","sputnikmissile","uazcop","uazcoprust","Arctic","Arctic_Dirty","Bus_City_2","Cherry","CherryAmbulance_DirtyGeneric","CherryBus","CherryBus_Dirty","Cherry_Dirty","Essence","Essence_Dirty","Honduh","Prion","Semitruck1","Semitruck2","Trailer1","Trailer1Grav","Trailer1Rono","Trailer1White","Truck_Box","Zoobaru","Zoobaru_Dirty","posttruck","posttruckopen","AGPU","BearCatNYC","CS_Front","CS_Mid","CS_Rear","CS_Seats","CS_Wing","CopCarNYC","CopCarNYC1","FMTVArmoredExt_D","FMTVArmoredExt_F","FMTVArmoredExt_G","FMTVArmoredExt_S","FMTVCanopyExt_F","FMTVCanopyInt_F","FMTVExt_D","FMTVExt_F","FMTVExt_G","FMTVExt_S","FMTVInt_F","HeliCrash1","Humvee2IntHatch_D","Humvee2IntHatch_F","Humvee2IntHatch_W","Humvee2Int_D","Humvee2Int_F","Humvee2Int_W","HumveeCanopy_F","HumveeExt_D","HumveeExt_F","HumveeExt_W","HumveeIntHatch_D","HumveeIntHatch_F","HumveeIntHatch_W","HumveeInt_D","HumveeInt_F","HumveeInt_W","HumveeOpen_F","M93A2_F","MRAP_Desert","StrykerExtGun_F","StrykerExt_D","StrykerExt_F","StrykerIntGun_F","StrykerInt_D","StrykerInt_F","StrykerTurret1","StrykerTurret2","StrykerTurret2D","UH60Folded","sheriff","Bulldozer","CopCarJP","ExcavatorBody","ExcavatorTracks"];
 
   const CMDS = {
     create:      { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).', example: 'create 1 part 10 0 5' },
@@ -381,11 +372,11 @@ require(['vs/editor/editor.main'], function () {
     weather: {
       params: [{name:'subtype',type:'enum',values:WEATHER_SUB}],
       subtypes: {
-        lunar:      { params: [{name:'cycle',type:'enum',values:['1','2','3','4','5','6','7','8']}], doc: 'Sets lunar cycle to either 1-8.' },
-        set: { params: [{name:'type',type:'enum',values:WEATHER_TYPE,default:''}], doc: 'Sets weather type.' },
+        lunar: { params: [{name:'cycle',type:'enum',values:['1','2','3','4','5','6','7','8']}], doc: 'Sets lunar cycle to either 1-8.' },
+        set:   { params: [{name:'type',type:'enum',values:WEATHER_TYPE,default:''}], doc: 'Sets weather type. Omit to clear weather.' },
       },
       doc: 'Change weather and lunar options.',
-      example: 'weather set ClearSky\nweather lunar 2',
+      example: 'weather set ClearSky\nweather set\nweather lunar 2',
     },
     trigger: {
       params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
@@ -454,74 +445,19 @@ require(['vs/editor/editor.main'], function () {
     },
   };
 
-  // ── Docs modal ──
-  (function initDocs() {
-    const overlay  = document.getElementById('docs-overlay');
-    const sidebar  = document.getElementById('docs-sidebar');
-    const content  = document.getElementById('docs-content');
-    let activeBtn  = null;
+  // ── Tab manager ──
+  let tabCounter = 0;
+  let activeTabId = null;
+  const tabs = {}; // id -> { name, model, viewState, debounce }
 
-    function typeColor(type) {
-      if (type === 'number')  return '#61afef';
-      if (type === 'uid')     return '#c678dd';
-      if (type === 'enum')    return '#e5c07b';
-      if (type === 'string')  return '#98c379';
-      if (type === 'command') return '#e06c75';
-      return '#abb2bf';
-    }
+  const tabsList = document.getElementById('tabs-list');
+  const editorWrap = document.getElementById('editor-wrap');
 
-    function renderParamsTable(params) {
-      if (!params.length) return '<p class="docs-no-params">No parameters.</p>';
-      let rows = params.map(p => {
-        let extra = '';
-        if (p.type === 'enum') {
-          const preview = p.values.length > 12
-            ? p.values.slice(0, 12).join(', ') + ` … (+${p.values.length - 12} more)`
-            : p.values.join(', ');
-          extra = `<div class="docs-param-enum">${preview}</div>`;
-        }
-        if (p.type === 'uid') extra = `<div class="docs-param-enum">UUID or %variable</div>`;
-        const defStr = p.default !== undefined ? ` <span style="color:#4a4a4a">(default: ${p.default})</span>` : '';
-        return `<tr><td>${p.name}${defStr}</td><td style="color:${typeColor(p.type)}">${p.type}</td><td>${extra}</td></tr>`;
-      }).join('');
-      return `<table class="docs-params-table"><thead><tr><th>parameter</th><th>type</th><th>values</th></tr></thead><tbody>${rows}</tbody></table>`;
-    }
-
-    function renderCmd(name, spec) {
-      let html = `<div class="docs-cmd-name">${name}</div><div class="docs-cmd-doc">${spec.doc}</div>`;
-      if (spec.subtypes) {
-        html += `<div class="docs-section-title">subtypes</div><div>`;
-        for (const [subName, sub] of Object.entries(spec.subtypes)) {
-          const allParams = [...spec.params, ...(sub.params || [])];
-          html += `<div class="docs-subtype-block"><div class="docs-subtype-name">${name} ${subName}</div><div class="docs-subtype-doc">${sub.doc}</div>${renderParamsTable(allParams)}</div>`;
-        }
-        html += `</div>`;
-      } else {
-        html += `<div class="docs-section-title">parameters</div>${renderParamsTable(spec.params)}`;
-      }
-      if (spec.example) html += `<div class="docs-section-title">example</div><div class="docs-example">${spec.example}</div>`;
-      content.innerHTML = html;
-    }
-
-    Object.keys(CMDS).forEach(name => {
-      const btn = document.createElement('button');
-      btn.className = 'docs-cmd-btn';
-      btn.textContent = name;
-      btn.addEventListener('click', () => {
-        if (activeBtn) activeBtn.classList.remove('active');
-        activeBtn = btn; btn.classList.add('active');
-        renderCmd(name, CMDS[name]);
-      });
-      sidebar.appendChild(btn);
-    });
-
-    document.getElementById('btn-docs').addEventListener('click', () => {
-      overlay.classList.add('open');
-      if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
-    });
-    document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-  })();
+  monaco.editor.defineTheme('cmdDark', {
+    base: 'vs-dark', inherit: true,
+    rules: [{ token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' }],
+    colors: {},
+  });
 
   monaco.languages.register({ id: LANG });
   monaco.languages.setMonarchTokensProvider(LANG, {
@@ -539,6 +475,137 @@ require(['vs/editor/editor.main'], function () {
       ]
     }
   });
+
+  // Single shared Monaco editor instance
+  const editor = monaco.editor.create(editorWrap, {
+    value: '', language: LANG, theme: 'cmdDark', fontSize: 14,
+    fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
+    minimap: { enabled: false }, scrollBeyondLastLine: false, renderLineHighlight: 'line',
+    tabSize: 2, wordWrap: 'off', parameterHints: { enabled: true, cycle: true },
+    quickSuggestions: { other: true, comments: false, strings: false },
+    suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on',
+    autoClosingBrackets: 'never', autoClosingQuotes: 'never',
+    inlayHints: { enabled: 'on' },
+  });
+
+  function createTab(name, content) {
+    tabCounter++;
+    const id = 'tab_' + tabCounter;
+    const tabName = name || ('commands' + tabCounter);
+    const model = monaco.editor.createModel(content || '', LANG);
+
+    tabs[id] = { name: tabName, model, viewState: null };
+
+    // Build tab DOM
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.id = id;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tab-name';
+    nameEl.textContent = tabName;
+    nameEl.title = 'Double-click to rename';
+
+    const closeEl = document.createElement('span');
+    closeEl.className = 'tab-close';
+    closeEl.innerHTML = '&#x2715;';
+    closeEl.title = 'Close tab';
+
+    tabEl.appendChild(nameEl);
+    tabEl.appendChild(closeEl);
+    tabsList.appendChild(tabEl);
+
+    // Click to switch
+    tabEl.addEventListener('click', (e) => {
+      if (e.target === closeEl) return;
+      switchTab(id);
+    });
+
+    // Double-click name to rename
+    nameEl.addEventListener('dblclick', () => startRename(id, tabEl, nameEl));
+
+    // Close tab
+    closeEl.addEventListener('click', () => closeTab(id));
+
+    // Validate on model change
+    model.onDidChangeContent(() => {
+      clearTimeout(tabs[id].debounce);
+      tabs[id].debounce = setTimeout(() => {
+        if (activeTabId === id) validate(model, editor);
+      }, 250);
+    });
+
+    switchTab(id);
+    return id;
+  }
+
+  function switchTab(id) {
+    if (activeTabId === id) return;
+
+    // Save view state of current tab
+    if (activeTabId && tabs[activeTabId]) {
+      tabs[activeTabId].viewState = editor.saveViewState();
+    }
+
+    // Deactivate old tab
+    tabsList.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+    activeTabId = id;
+    const tab = tabs[id];
+
+    // Set model
+    editor.setModel(tab.model);
+    if (tab.viewState) editor.restoreViewState(tab.viewState);
+    editor.focus();
+
+    // Activate tab element
+    const tabEl = tabsList.querySelector(`[data-id="${id}"]`);
+    if (tabEl) tabEl.classList.add('active');
+
+    // Re-validate
+    validate(tab.model, editor);
+  }
+
+  function closeTab(id) {
+    const ids = Object.keys(tabs);
+    if (ids.length === 1) return; // keep at least one tab
+
+    const tabEl = tabsList.querySelector(`[data-id="${id}"]`);
+    if (tabEl) tabEl.remove();
+
+    const wasActive = activeTabId === id;
+    tabs[id].model.dispose();
+    delete tabs[id];
+
+    if (wasActive) {
+      const remaining = Object.keys(tabs);
+      if (remaining.length) switchTab(remaining[remaining.length - 1]);
+    }
+  }
+
+  function startRename(id, tabEl, nameEl) {
+    const input = document.createElement('input');
+    input.className = 'tab-name-input';
+    input.value = tabs[id].name;
+    tabEl.replaceChild(input, nameEl);
+    input.focus();
+    input.select();
+
+    function commitRename() {
+      const newName = input.value.trim() || tabs[id].name;
+      tabs[id].name = newName;
+      nameEl.textContent = newName;
+      tabEl.replaceChild(nameEl, input);
+    }
+
+    input.addEventListener('blur', commitRename);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = tabs[id].name; input.blur(); }
+    });
+  }
+
+  // ── Language features (shared, operate on active model) ──
 
   function parseLine(line) {
     const commentIdx = line.indexOf('//');
@@ -876,23 +943,6 @@ require(['vs/editor/editor.main'], function () {
     updateErrorPanel(markers, editorRef);
   }
 
-  monaco.editor.defineTheme('cmdDark', {
-    base: 'vs-dark', inherit: true,
-    rules: [{ token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' }],
-    colors: {},
-  });
-
-  const editor = monaco.editor.create(document.getElementById('editor-wrap'), {
-    value: 'create 1 part 1 1 1', language: LANG, theme: 'cmdDark', fontSize: 14,
-    fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
-    minimap: { enabled: false }, scrollBeyondLastLine: false, renderLineHighlight: 'line',
-    tabSize: 2, wordWrap: 'off', parameterHints: { enabled: true, cycle: true },
-    quickSuggestions: { other: true, comments: false, strings: false },
-    suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on',
-    autoClosingBrackets: 'never', autoClosingQuotes: 'never',
-    inlayHints: { enabled: 'on' },
-  });
-
   function cleanPastedLine(line) {
     if (!line.includes(',')) return line;
     const raw = line.trimStart();
@@ -926,19 +976,27 @@ require(['vs/editor/editor.main'], function () {
     if (edits.length) editor.executeEdits('paste-comma-clean', edits);
   });
 
-  let debounce;
-  editor.onDidChangeModelContent(() => { clearTimeout(debounce); debounce = setTimeout(() => validate(editor.getModel(), editor), 250); });
-  validate(editor.getModel(), editor);
-
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
 
+  // ── New tab button ──
+  document.getElementById('btn-new-tab').addEventListener('click', () => createTab());
+
+  // ── Export: uses tab name as filename ──
   document.getElementById('btn-export').addEventListener('click', () => {
-    const blob = new Blob([editor.getValue()], { type: 'text/plain' });
+    const tab = tabs[activeTabId];
+    if (!tab) return;
+    const blob = new Blob([tab.model.getValue()], { type: 'text/plain' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'script.txt'; a.click();
+    a.href = URL.createObjectURL(blob);
+    a.download = tab.name + '.txt';
+    a.click();
     URL.revokeObjectURL(a.href);
   });
+
+  // ── Import: ask new tab or override ──
+  let pendingImportContent = null;
+  let pendingImportName = null;
 
   document.getElementById('btn-import').addEventListener('click', () => {
     const input = document.createElement('input');
@@ -946,11 +1004,121 @@ require(['vs/editor/editor.main'], function () {
     input.addEventListener('change', () => {
       const file = input.files[0]; if (!file) return;
       const reader = new FileReader();
-      reader.onload = e => { editor.setValue(e.target.result); editor.setPosition({ lineNumber: 1, column: 1 }); editor.focus(); };
+      reader.onload = e => {
+        pendingImportContent = e.target.result;
+        // Strip .txt extension for tab name
+        pendingImportName = file.name.replace(/\.txt$/i, '');
+        document.getElementById('import-filename').textContent = file.name;
+        document.getElementById('import-overlay').classList.add('open');
+      };
       reader.readAsText(file);
     });
     input.click();
   });
+
+  document.getElementById('import-new-tab').addEventListener('click', () => {
+    if (pendingImportContent === null) return;
+    createTab(pendingImportName, pendingImportContent);
+    pendingImportContent = null;
+    pendingImportName = null;
+    document.getElementById('import-overlay').classList.remove('open');
+  });
+
+  document.getElementById('import-override').addEventListener('click', () => {
+    if (pendingImportContent === null) return;
+    const tab = tabs[activeTabId];
+    if (tab) {
+      tab.model.setValue(pendingImportContent);
+      // Also rename tab to match file
+      tab.name = pendingImportName;
+      const tabEl = tabsList.querySelector(`[data-id="${activeTabId}"]`);
+      if (tabEl) tabEl.querySelector('.tab-name').textContent = pendingImportName;
+      editor.setPosition({ lineNumber: 1, column: 1 });
+      editor.focus();
+    }
+    pendingImportContent = null;
+    pendingImportName = null;
+    document.getElementById('import-overlay').classList.remove('open');
+  });
+
+  document.getElementById('import-close').addEventListener('click', () => {
+    pendingImportContent = null;
+    document.getElementById('import-overlay').classList.remove('open');
+  });
+
+  // ── Docs modal ──
+  (function initDocs() {
+    const overlay  = document.getElementById('docs-overlay');
+    const sidebar  = document.getElementById('docs-sidebar');
+    const content  = document.getElementById('docs-content');
+    let activeBtn  = null;
+
+    function typeColor(type) {
+      if (type === 'number')  return '#61afef';
+      if (type === 'uid')     return '#c678dd';
+      if (type === 'enum')    return '#e5c07b';
+      if (type === 'string')  return '#98c379';
+      if (type === 'command') return '#e06c75';
+      return '#abb2bf';
+    }
+
+    function renderParamsTable(params) {
+      if (!params.length) return '<p class="docs-no-params">No parameters.</p>';
+      let rows = params.map(p => {
+        let extra = '';
+        if (p.type === 'enum') {
+          const preview = p.values.length > 12
+            ? p.values.slice(0, 12).join(', ') + ` … (+${p.values.length - 12} more)`
+            : p.values.join(', ');
+          extra = `<div class="docs-param-enum">${preview}</div>`;
+        }
+        if (p.type === 'uid') extra = `<div class="docs-param-enum">UUID or %variable</div>`;
+        const defStr = p.default !== undefined ? ` <span style="color:#4a4a4a">(default: ${p.default})</span>` : '';
+        return `<tr><td>${p.name}${defStr}</td><td style="color:${typeColor(p.type)}">${p.type}</td><td>${extra}</td></tr>`;
+      }).join('');
+      return `<table class="docs-params-table"><thead><tr><th>parameter</th><th>type</th><th>values</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderCmd(name, spec) {
+      let html = `<div class="docs-cmd-name">${name}</div><div class="docs-cmd-doc">${spec.doc}</div>`;
+      if (spec.subtypes) {
+        html += `<div class="docs-section-title">subtypes</div><div>`;
+        for (const [subName, sub] of Object.entries(spec.subtypes)) {
+          const allParams = [...spec.params, ...(sub.params || [])];
+          html += `<div class="docs-subtype-block"><div class="docs-subtype-name">${name} ${subName}</div><div class="docs-subtype-doc">${sub.doc}</div>${renderParamsTable(allParams)}</div>`;
+        }
+        html += `</div>`;
+      } else {
+        html += `<div class="docs-section-title">parameters</div>${renderParamsTable(spec.params)}`;
+      }
+      if (spec.example) html += `<div class="docs-section-title">example</div><div class="docs-example">${spec.example}</div>`;
+      content.innerHTML = html;
+    }
+
+    Object.keys(CMDS).forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'docs-cmd-btn';
+      btn.textContent = name;
+      btn.addEventListener('click', () => {
+        if (activeBtn) activeBtn.classList.remove('active');
+        activeBtn = btn; btn.classList.add('active');
+        renderCmd(name, CMDS[name]);
+      });
+      sidebar.appendChild(btn);
+    });
+
+    document.getElementById('btn-docs').addEventListener('click', () => {
+      overlay.classList.add('open');
+      if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
+    });
+    document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  })();
+
+  // ── Create initial tab ──
+  createTab('commands1', 'create 1 part 1 1 1');
+  // Reset counter so next tab is commands2
+  // (createTab already incremented to 1, so next will be 2 naturally)
 });
 </script>
 </body>
