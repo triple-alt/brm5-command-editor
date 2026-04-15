@@ -11,6 +11,7 @@ const CHANGELOG = [
     date: "15/04/2025",
     changes: [
       { type: "new", text: "Editor tabs are now persistent and you aren't prompted to save." },
+      { type: "change", text: "Editor tabs are moveable on the tab bar." },
     ]
   },
   {
@@ -18,7 +19,7 @@ const CHANGELOG = [
     date: "12/04/2025",
     changes: [
       { type: "new", text: "Added weather command." },
-      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing/exporting" },
+      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing/exporting." },
     ]
   },
   {
@@ -46,7 +47,7 @@ const CHANGELOG = [
       { type: "new",    text: "Added support for 'isButton' property." },
       { type: "new",    text: "Added support for 'isLooping' property." },
       { type: "new",    text: "Pasted coordinates with commas get commas automatically removed." },
-      { type: "new",    text: "Added the rest of the commands (hopefully all?)" },
+      { type: "new",    text: "Added the rest of the commands (hopefully all?)." },
       { type: "change", text: "Added this changelog." },
     ]
   },
@@ -78,10 +79,19 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 }
 .tab:hover { background: #1e1e1e; color: #888; }
 .tab.active { background: #1a1a1a; color: #abb2bf; border-bottom: 1px solid #1a1a1a; margin-bottom: -1px; }
-.tab.active::after {
+.tab.active::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0;
-  height: 2px; background: #61afef;
+  height: 2px; background: #61afef; z-index: 1;
 }
+.tab.drag-over-left::before {
+  content: ''; position: absolute; left: -1px; top: 0; bottom: 0;
+  width: 2px; background: #61afef; z-index: 10; pointer-events: none;
+}
+.tab.drag-over-right::after {
+  content: ''; position: absolute; right: -1px; top: 0; bottom: 0;
+  width: 2px; background: #61afef; z-index: 10; pointer-events: none;
+}
+.tab.dragging { opacity: 0.4; }
 .tab-name {
   flex: 1; padding: 0 8px 0 10px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -577,6 +587,62 @@ require(['vs/editor/editor.main'], function () {
     inlayHints: { enabled: 'on' },
   });
 
+  // ── Tab drag-to-reorder ──
+  let dragSrcId = null;
+
+  function attachDragHandlers(tabEl) {
+    tabEl.setAttribute('draggable', 'true');
+
+    tabEl.addEventListener('dragstart', (e) => {
+      dragSrcId = tabEl.dataset.id;
+      tabEl.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragSrcId);
+    });
+
+    tabEl.addEventListener('dragend', () => {
+      tabEl.classList.remove('dragging');
+      tabsList.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('drag-over-left', 'drag-over-right');
+      });
+      dragSrcId = null;
+    });
+
+    tabEl.addEventListener('dragover', (e) => {
+      if (!dragSrcId || dragSrcId === tabEl.dataset.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = tabEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      tabsList.querySelectorAll('.tab').forEach(t => t.classList.remove('drag-over-left', 'drag-over-right'));
+      tabEl.classList.add(e.clientX < midX ? 'drag-over-left' : 'drag-over-right');
+    });
+
+    tabEl.addEventListener('dragleave', () => {
+      tabEl.classList.remove('drag-over-left', 'drag-over-right');
+    });
+
+    tabEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!dragSrcId || dragSrcId === tabEl.dataset.id) return;
+
+      const srcEl = tabsList.querySelector(`[data-id="${dragSrcId}"]`);
+      if (!srcEl) return;
+
+      const rect = tabEl.getBoundingClientRect();
+      const dropBefore = e.clientX < rect.left + rect.width / 2;
+
+      if (dropBefore) {
+        tabsList.insertBefore(srcEl, tabEl);
+      } else {
+        tabEl.after(srcEl);
+      }
+
+      tabEl.classList.remove('drag-over-left', 'drag-over-right');
+      saveSession();
+    });
+  }
+
   function createTab(name, content) {
     tabCounter++;
     const id = 'tab_' + tabCounter;
@@ -615,6 +681,9 @@ require(['vs/editor/editor.main'], function () {
 
     // Close tab
     closeEl.addEventListener('click', () => closeTab(id));
+
+    // Drag to reorder
+    attachDragHandlers(tabEl);
 
     // Validate on model change + save session
     model.onDidChangeContent(() => {
@@ -1333,9 +1402,11 @@ require(['vs/editor/editor.main'], function () {
 
   function saveSession() {
     try {
+      // Read order from DOM so drag-reordered tabs are saved correctly
+      const tabOrder = Array.from(tabsList.querySelectorAll('.tab')).map(el => el.dataset.id);
       const session = {
         activeTabId,
-        tabOrder: Object.keys(tabs),
+        tabOrder,
         tabs: Object.fromEntries(
           Object.entries(tabs).map(([id, tab]) => [id, { name: tab.name, content: tab.model.getValue() }])
         ),
@@ -1370,6 +1441,7 @@ require(['vs/editor/editor.main'], function () {
     tabEl.addEventListener('click', (e) => { if (e.target === closeEl) return; switchTab(id); });
     nameEl.addEventListener('dblclick', () => startRename(id, tabEl, nameEl));
     closeEl.addEventListener('click', () => closeTab(id));
+    attachDragHandlers(tabEl);
 
     model.onDidChangeContent(() => {
       clearTimeout(tabs[id].debounce);
