@@ -7,29 +7,18 @@
 <script>
 const CHANGELOG = [
   {
-    version: "Multi-export, multi-import, close warning",
-    date: "12/04/2025",
+    version: "Persistent Editor Tabs",
+    date: "15/04/2025",
     changes: [
-      { type: "new", text: "Closing a tab now prompts you to export first." },
-      { type: "new", text: "Export button now opens a multi-export dialog to download any/all tabs at once." },
-      { type: "new", text: "Import now supports selecting multiple files at once, each opens in a new tab." },
+      { type: "new", text: "Editor tabs are now persistent and you aren't prompted to save." },
     ]
   },
   {
-    version: "Multi-tab support",
-    date: "12/04/2025",
-    changes: [
-      { type: "new", text: "Added multiple editor tabs." },
-      { type: "new", text: "Tabs can be renamed by double-clicking." },
-      { type: "new", text: "Export uses tab name as filename." },
-      { type: "new", text: "Import asks whether to open in new tab or override current." },
-    ]
-  },
-  {
-    version: "Added weather command",
+    version: "Weather Command and QOL additions",
     date: "12/04/2025",
     changes: [
       { type: "new", text: "Added weather command." },
+      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing/exporting" },
     ]
   },
   {
@@ -627,11 +616,12 @@ require(['vs/editor/editor.main'], function () {
     // Close tab
     closeEl.addEventListener('click', () => closeTab(id));
 
-    // Validate on model change
+    // Validate on model change + save session
     model.onDidChangeContent(() => {
       clearTimeout(tabs[id].debounce);
       tabs[id].debounce = setTimeout(() => {
         if (activeTabId === id) validate(model, editor);
+        saveSession();
       }, 250);
     });
 
@@ -664,6 +654,7 @@ require(['vs/editor/editor.main'], function () {
 
     // Re-validate
     validate(tab.model, editor);
+    saveSession();
   }
 
   function exportTab(id) {
@@ -707,6 +698,7 @@ require(['vs/editor/editor.main'], function () {
       const remaining = Object.keys(tabs);
       if (remaining.length) switchTab(remaining[remaining.length - 1]);
     }
+    saveSession();
   }
 
   // Close-warning modal handlers
@@ -740,6 +732,7 @@ require(['vs/editor/editor.main'], function () {
       tabs[id].name = newName;
       nameEl.textContent = newName;
       tabEl.replaceChild(nameEl, input);
+      saveSession();
     }
 
     input.addEventListener('blur', commitRename);
@@ -1124,7 +1117,7 @@ require(['vs/editor/editor.main'], function () {
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
 
   // ── New tab button ──
-  document.getElementById('btn-new-tab').addEventListener('click', () => createTab());
+  document.getElementById('btn-new-tab').addEventListener('click', () => { createTab(); saveSession(); });
 
   // ── Multi-export modal ──
   function openMultiExport() {
@@ -1228,6 +1221,7 @@ require(['vs/editor/editor.main'], function () {
     if (pendingImportIdx < pendingImportQueue.length) {
       const item = pendingImportQueue[pendingImportIdx];
       createTab(item.name, item.content);
+      saveSession();
       pendingImportIdx++;
       showNextImport();
     }
@@ -1244,6 +1238,7 @@ require(['vs/editor/editor.main'], function () {
         if (tabEl) tabEl.querySelector('.tab-name').textContent = item.name;
         editor.setPosition({ lineNumber: 1, column: 1 });
         editor.focus();
+        saveSession();
       }
       pendingImportIdx++;
       showNextImport();
@@ -1333,17 +1328,84 @@ require(['vs/editor/editor.main'], function () {
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
   })();
 
-  // ── Create initial tab ──
-  createTab('commands1', 'create 1 part 1 1 1');
+  // ── Session persistence via localStorage ──
+  const STORAGE_KEY = 'cmdEditor_session';
 
-  // ── Warn on page refresh / close ──
-  window.addEventListener('beforeunload', (e) => {
-    const hasContent = Object.values(tabs).some(tab => tab.model.getValue().trim() !== '');
-    if (hasContent) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  });
+  function saveSession() {
+    try {
+      const session = {
+        activeTabId,
+        tabOrder: Object.keys(tabs),
+        tabs: Object.fromEntries(
+          Object.entries(tabs).map(([id, tab]) => [id, { name: tab.name, content: tab.model.getValue() }])
+        ),
+        tabCounter,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    } catch (e) { /* storage full or unavailable */ }
+  }
+
+  function restoreTab(id, name, content) {
+    const model = monaco.editor.createModel(content || '', LANG);
+    tabs[id] = { name, model, viewState: null };
+
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.id = id;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tab-name';
+    nameEl.textContent = name;
+    nameEl.title = 'Double-click to rename';
+
+    const closeEl = document.createElement('span');
+    closeEl.className = 'tab-close';
+    closeEl.innerHTML = '&#x2715;';
+    closeEl.title = 'Close tab';
+
+    tabEl.appendChild(nameEl);
+    tabEl.appendChild(closeEl);
+    tabsList.appendChild(tabEl);
+
+    tabEl.addEventListener('click', (e) => { if (e.target === closeEl) return; switchTab(id); });
+    nameEl.addEventListener('dblclick', () => startRename(id, tabEl, nameEl));
+    closeEl.addEventListener('click', () => closeTab(id));
+
+    model.onDidChangeContent(() => {
+      clearTimeout(tabs[id].debounce);
+      tabs[id].debounce = setTimeout(() => {
+        if (activeTabId === id) validate(model, editor);
+        saveSession();
+      }, 250);
+    });
+  }
+
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const session = JSON.parse(raw);
+      if (!session.tabs || !session.tabOrder || !session.tabOrder.length) return false;
+
+      tabCounter = session.tabCounter || 0;
+
+      session.tabOrder.forEach(id => {
+        const saved = session.tabs[id];
+        if (saved) restoreTab(id, saved.name, saved.content);
+      });
+
+      const restoreId = session.activeTabId && tabs[session.activeTabId]
+        ? session.activeTabId
+        : session.tabOrder[session.tabOrder.length - 1];
+      switchTab(restoreId);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // ── Boot: restore session or start fresh ──
+  if (!loadSession()) {
+    createTab('commands1', 'create 1 part 1 1 1');
+  }
 });
 </script>
 </body>
