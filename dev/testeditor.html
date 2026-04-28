@@ -15,7 +15,14 @@ const CHANGELOG = [
     ]
   },
   {
-    version: "CRS Compiler Integration",
+    version: "CRS error checker & bot rotation",
+    date: "28/04/2025",
+    changes: [
+      { type: "new", text: "CRS tabs now show live errors/warnings in the error panel as you type, powered by the compiler." },
+      { type: "fix", text: "Added rX, rY, rZ rotation parameters to bot spawn." },
+    ]
+  },
+  {
     date: "28/04/2025",
     changes: [
       { type: "new", text: "Added in-browser Compiled RGE Script (.crs) compiler." },
@@ -519,7 +526,7 @@ require(['vs/editor/editor.main'], function () {
     bot: {
       params: [{name:'subtype',type:'enum',values:BOT_SUB}],
       subtypes: {
-        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawns a bot at the specified location.' },
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number',default:0},{name:'rY',type:'number',default:0},{name:'rZ',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
         delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
         alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts or calms all bots in the specified world.' },
         direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position using the given priority mode.' },
@@ -1108,7 +1115,63 @@ require(['vs/editor/editor.main'], function () {
     });
   }
 
+  // ── CRS error checker ──
+  // Converts a flat char index in the source to {line, col} (1-based)
+  function _crsIdxToPos(source, idx) {
+    if (idx == null || idx < 0) return { line: 1, col: 1 };
+    const lines = source.split('\n');
+    let remaining = idx;
+    for (let i = 0; i < lines.length; i++) {
+      if (remaining <= lines[i].length) return { line: i + 1, col: remaining + 1 };
+      remaining -= lines[i].length + 1;
+    }
+    return { line: lines.length, col: 1 };
+  }
+
+  function validateCRS(model, editorRef) {
+    const source = model.getValue();
+    const markers = [];
+    // Run full compiler as linter - uses testScript which resets all state
+    let result;
+    try {
+      result = window.CRS.testScript(source);
+    } catch(e) {
+      result = { success: false, err: e.message, idx: 0, eidx: null, errs: [] };
+    }
+
+    const pushMarker = (idx, eidx, msg, severity) => {
+      const start = _crsIdxToPos(source, idx);
+      const end   = eidx != null ? _crsIdxToPos(source, eidx) : { line: start.line, col: start.col + 1 };
+      markers.push({
+        severity,
+        message: msg,
+        startLineNumber: start.line,
+        startColumn:     start.col,
+        endLineNumber:   end.line,
+        endColumn:       end.col,
+      });
+    };
+
+    // Soft errors collected during parse
+    if (result.errs && result.errs.length) {
+      for (const e of result.errs) {
+        pushMarker(e.idx, e.eidx, e.err, monaco.MarkerSeverity.Error);
+      }
+    }
+    // Hard (thrown) error
+    if (!result.success && result.err) {
+      pushMarker(result.idx ?? 0, result.eidx ?? null, result.err, monaco.MarkerSeverity.Error);
+    }
+
+    monaco.editor.setModelMarkers(model, CRS_LANG, markers);
+    updateErrorPanel(markers, editorRef);
+  }
+
   function validate(model, editorRef) {
+    // Dispatch based on language
+    const lang = model.getLanguageId ? model.getLanguageId() : null;
+    if (lang === CRS_LANG) { validateCRS(model, editorRef); return; }
+
     const markers = [];
     for (let ln = 1; ln <= model.getLineCount(); ln++) {
       const line = model.getLineContent(ln);
