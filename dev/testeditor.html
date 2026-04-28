@@ -1720,7 +1720,18 @@ require(['vs/editor/editor.main'], function () {
 
     function renderEntry(entry) {
       let html = `<div style="color:#61afef;font-size:15px;font-weight:600;margin-bottom:6px;">${entry.label}</div>`;
-      html += `<div style="color:#888;font-size:12px;margin-bottom:12px;">${entry.doc}</div>`;
+      // Convert \n to <br>, and • lines to styled bullets
+      const docHtml = entry.doc
+        .split('\n')
+        .map(line => {
+          if (line.startsWith('•')) {
+            return `<div style="display:flex;gap:6px;margin:2px 0;"><span style="color:#61afef;flex-shrink:0;">•</span><span>${line.slice(1).trim()}</span></div>`;
+          }
+          if (line === '') return '<div style="margin-bottom:6px;"></div>';
+          return `<div>${line}</div>`;
+        })
+        .join('');
+      html += `<div style="color:#888;font-size:12px;margin-bottom:12px;line-height:1.7;">${docHtml}</div>`;
       if (entry.example) {
         html += `<div style="color:#555;font-size:10px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">example</div>`;
         html += `<div style="background:#161616;border:1px solid #2a2a2a;border-radius:4px;padding:8px 12px;font-size:12px;color:#abb2bf;white-space:pre;">${entry.example}</div>`;
@@ -4236,62 +4247,68 @@ function compileScript(source, config) {
 <script>
 const CRS_DOCS = [
   { label: "namespace", detail: "Declares namespace",
-    doc: "Required first statement. Declares the namespace for your script. All functions, templates, and variables are scoped within this namespace.",
-    example: "namespace myscript" },
+    doc: "Required first statement of every .crs file. Declares the namespace that all functions, templates, and variables in this file belong to.\n\nNamespaces are the main way to combine multiple scripts — you can reference functions, templates, and global variables from another namespace using the ns:name syntax. This means you can split a large project across multiple .crs files, compile them separately, and import all the resulting command files into the game. Each file must have a unique namespace name.",
+    example: "// file1.crs\nnamespace doors\nglobal *open 0\nfunc toggle {\n  // ...\n}\nexpose toggle ToggleDoor\n\n// file2.crs — references the doors namespace\nnamespace hud\nfunc update {\n  call doors:toggle\n}" },
   { label: "func", detail: "Define a function",
-    doc: "Defines a function. Functions can be called with `call` and exposed as triggers via `expose`. Internally becomes a trigger.",
-    example: "func myFunc {\n  // body\n}" },
+    doc: "Defines a function. Functions can be called with `call` and exposed as in-game triggers via `expose`. Internally, each function becomes its own trigger. Functions are async — calling one activates its trigger and returns immediately without waiting.",
+    example: "func myFunc {\n  set *active 1\n  call otherFunc\n}" },
   { label: "template", detail: "Define a reusable template",
-    doc: "Defines a template with optional parameters. Use with `use`. Templates are inlined at each call site.",
-    example: "template myTemp (param1 #param2) {\n  // body\n}" },
-  { label: "expose", detail: "Expose function as trigger",
-    doc: "Exposes a function as an in-game trigger. Trigger name must be ≤25 chars and not start with _crs_.",
-    example: "expose myFunc TriggerName" },
+    doc: "Defines a reusable block of code that is inlined at every `use` site at compile time. Templates can have parameters — prefix with # for compiler var (number) parameters, or no prefix for regular (bit/string) parameters. Templates cannot be nested (a template cannot use itself directly or indirectly).",
+    example: "template setFlag (target) {\n  set target 1\n}\n\nfunc myFunc {\n  use setFlag (*active)\n}" },
+  { label: "expose", detail: "Expose function as in-game trigger",
+    doc: "Creates a named in-game trigger that activates the given function when triggered. The trigger name must be 25 characters or fewer and must not start with _crs_ (reserved for internal use).",
+    example: "expose myFunc ToggleDoor\nexpose otherFunc ResetAll" },
   { label: "global", detail: "Define a global variable",
-    doc: "Declares a global variable on the namespace. Use *varName to reference it. Prefix # for compiler vars (numbers only). Prefix no sigil for bit (0/1) variables.",
-    example: "global *active 0\nglobal *#count 5" },
-  { label: "globalinit", detail: "Global init commands",
-    doc: "Commands in this block run once when the script is imported. Useful for setting up bots, initial state, etc.",
-    example: "globalinit [\n  bot spawn 1 Guard 0 0 0\n]" },
+    doc: "Declares a global variable on the namespace. Global variables persist across function calls and are shared across the whole namespace.\n\nThree types are supported:\n• Bit variable — holds 0 or 1. Declare with just a name: global *flag 0\n• String variable — holds text. Declare with a quoted value: global *label \"hello\"\n• Compiler variable — a fixed number resolved at compile time, not at runtime. Prefix the name with #: global *#count 5\n\nAll globals must be referenced with * prefix (e.g. *flag, *#count). Globals from other namespaces can be read via ns:name syntax.",
+    example: "global *active 0\nglobal *#spawnX 100\nglobal *greeting \"hello world\"" },
+  { label: "globalinit", detail: "Run commands on import",
+    doc: "Commands inside this block are inserted into the script's one-time initialization sequence — they run once when the compiled script is imported into the game. Use this for setup that only needs to happen once, such as spawning bots or setting initial trigger states. Uses raw command syntax (same as [...]).",
+    example: "globalinit [\n  bot spawn 1 Guard 0 0 0 0 0 0\n  trigger create 1 myTrigger\n]" },
   { label: "var", detail: "Function-local variable",
-    doc: "Declares a variable in a function scope. Resets to its default value each time the function is invoked.",
-    example: "var myBit 0\nvar #count 3" },
+    doc: "Declares a variable scoped to a function. The variable resets to its default value each time the function body starts executing. Same type rules as global: unprefixed name for bit (0/1), # prefix for compiler var (number), and quoted value for string.",
+    example: "func myFunc {\n  var done 0\n  var #step 3\n  var *msg \"running\"\n}" },
   { label: "local", detail: "Template-local variable",
-    doc: "Declares a variable in a template scope. Each use of the template gets its own copy.",
-    example: "local myBit 0" },
+    doc: "Declares a variable scoped to a single use of a template. Each use of the template gets its own independent copy, resetting to the default each time. Same type rules as var.",
+    example: "template doThing () {\n  local flag 0\n  set flag 1\n}" },
   { label: "set", detail: "Set a bit variable",
-    doc: "Sets a regular bit variable to 0 or 1. Can only target regular (non-compiler) bit variables.",
-    example: "set *active 1\nset myBit 0" },
+    doc: "Sets a bit variable to 0 or 1 at runtime. Only works on regular bit variables — compiler vars (#) cannot be set at runtime as they are resolved at compile time.",
+    example: "set *active 1\nset myLocalBit 0" },
   { label: "if", detail: "Conditional branching",
-    doc: "Branches based on a bit variable. Both true and false cases must be provided. The else block can be empty.",
-    example: "if *active {\n  // true case\n} else {\n  // false case\n}" },
+    doc: "Branches based on the value of a bit variable at runtime. Both the true block and the else block must be present — neither can be omitted. However, either block can be left empty.",
+    example: "if *active {\n  set *active 0\n} else {\n  // empty else is fine\n}" },
   { label: "for", detail: "Compile-time loop",
-    doc: "Unrolled loop at compile time. Iterator is a compiler var (#). Config can be manual `(start end step dir)` or a group variable.",
-    example: "for (#i (0 5)) {\n  // body runs 5x\n}" },
+    doc: "Unrolls a loop at compile time — the body is duplicated once per iteration, so there is no runtime looping overhead.\n\nThe iterator must be a new compiler var (#name) that does not already exist. It holds the current index value and can be read inside the body.\n\nTwo config forms:\n\n1. Manual range: (start end) or (start end step) or (start end step dir)\n   • start — index the loop begins at (inclusive)\n   • end — index the loop stops before (exclusive, like a < check)\n   • step — how much to add (U) or subtract (D) each iteration, defaults to 1\n   • dir — U counts up (start → end-1), D counts down (start → end+1), defaults to U\n\n2. Group variable: pass a group variable instead of a config — the loop runs once per element in the group, and the iterator holds the element index.\n\nThe iterator cannot go negative — if a down-counting loop would go below 0 the compiler will throw.",
+    example: "// counts 0, 1, 2, 3, 4\nfor (#i (0 5)) {\n  !trigger activate 1 myTrigger\n}\n\n// counts 10, 8, 6 (step 2, direction D, stops before 5)\nfor (#i (10 5 2 D)) {\n  !trigger activate 1 myTrigger\n}\n\n// iterate over a group\nglobal *#slots <3>\nfor (#i *#slots) {\n  !trigger activate 1 myTrigger\n}" },
   { label: "call", detail: "Call a function",
-    doc: "Activates another function's trigger. Async — does not wait for completion.",
-    example: "call myFunc\ncall otherNs:myFunc" },
+    doc: "Activates another function's trigger. Because functions are triggers internally, `call` is async — it fires the trigger and returns immediately without waiting for it to finish. Functions in other namespaces can be called with the ns:funcName syntax.",
+    example: "call myFunc\ncall doors:toggle" },
   { label: "use", detail: "Use a template",
-    doc: "Inlines a template at this location, passing variables as arguments.",
-    example: "use myTemp (myVar *#count)" },
+    doc: "Inlines a template at this location, passing variables as arguments. The number of arguments must match the template's parameter list exactly. Arguments can be any variable reference — bit variables, string variables, or compiler vars.",
+    example: "template greet (name) {\n  !rename 1 % {name}\n}\n\nfunc myFunc {\n  use greet (*myName)\n}" },
   { label: "return", detail: "Early exit",
-    doc: "Stops the current function or template at this point.",
-    example: "return" },
-  { label: "break", detail: "Break from loop",
-    doc: "Exits the current for loop early. Only valid inside loops.",
-    example: "break" },
-  { label: "continue", detail: "Continue loop",
-    doc: "Skips to the next iteration of the current for loop.",
-    example: "continue" },
+    doc: "Stops execution of the current function or template at this point. Code after return in the same block will not run.",
+    example: "func myFunc {\n  if *done {\n    return\n  } else {}\n  // only runs if *done was 0\n  set *done 1\n}" },
+  { label: "break", detail: "Break from for loop",
+    doc: "Exits the current for loop early at compile time. Since loops are unrolled, break causes the remaining iterations to be discarded during compilation.",
+    example: "for (#i (0 10)) {\n  if *stop {\n    break\n  } else {}\n}" },
+  { label: "continue", detail: "Skip to next iteration",
+    doc: "Skips the rest of the current iteration's body and moves on to the next one at compile time.",
+    example: "for (#i (0 5)) {\n  if *skip {\n    continue\n  } else {}\n  !trigger activate 1 myTrigger\n}" },
   { label: "copy", detail: "Copy a function",
-    doc: "Duplicates a function and its internal variables under a new name, allowing it to run in parallel.",
-    example: "copy myFuncB myFuncA" },
+    doc: "Duplicates a function and its internal variables under a new name. This is useful when you want to run the same logic multiple times in parallel — since calling the same function twice at once would cause its variables to collide, copy gives each concurrent use its own isolated copy.",
+    example: "func baseLogic {\n  var flag 0\n  // ...\n}\ncopy logicA baseLogic\ncopy logicB baseLogic\n// logicA and logicB are now independent" },
+  { label: "Strings", detail: "String variables and interpolation",
+    doc: "String variables hold arbitrary text and are declared with a double-quoted value. They can be used as arguments to raw commands via string interpolation.\n\nDeclare with global or var/local:\n  global *msg \"hello\"\n  var *label \"world\"\n\nString interpolation: inside raw commands (! or [...]) and inside other string values, you can embed a string variable using {varName}. This splices the variable's current text value directly into the command at compile time.\n\nNote: only string variables can be interpolated — compiler vars (#) and bit variables cannot be put inside {}.",
+    example: "global *botName \"Guard\"\nglobal *pos \"0 0 0\"\n\nglobalinit [\n  bot spawn 1 {*botName} {*pos} 0 0 0\n]\n\nfunc rename {\n  var *newName \"Soldier\"\n  !rename 1 % {*newName}\n}" },
+  { label: "Groups", detail: "Group variables",
+    doc: "A group variable holds an ordered list of other variables. Groups are declared using angle brackets with space-separated values:\n  global *#coords <10 20 30>\n\nEach element can be a number, a bit (0/1), or another group. Groups can be accessed by index using the dot accessor:\n  *#coords.0  →  10\n  *#coords.1  →  20\n\nA group can also be coerced to a compiler var equal to its length, so you can pass a group directly where a number is expected (it resolves to the count of elements).\n\nThe main use of groups is as for loop configs — passing a group variable to a for loop iterates once per element.",
+    example: "global *#xs <0 10 20 30>\n\n// iterate over the group\nfor (#i *#xs) {\n  // *#xs.{#i} would give each value\n  !trigger activate 1 myTrigger\n}\n\n// access by index\nglobal *#first *#xs.0" },
   { label: "![cmd]", detail: "Single raw command",
-    doc: "Inserts a single raw RGE command. Supports string interpolation via {varName}.",
-    example: "!create 1 part 0 0 0 0 0 0\n!bot spawn 1 Guard {*#x} 0 0" },
+    doc: "Inserts a single raw RGE command into the current trigger. The ! must be at the start of the line. Supports string interpolation with {varName} — only string variables can be interpolated.",
+    example: "global *trig \"myTrigger\"\n\nfunc activate {\n  !trigger activate 1 {*trig}\n  !wait 0.5\n}" },
   { label: "[...]", detail: "Multiple raw commands",
-    doc: "Inserts multiple raw RGE commands. Empty lines are ignored. Supports string interpolation.",
-    example: "[\n  create 1 part 0 0 0 0 0 0\n  trigger create 1 myTrigger\n]" },
+    doc: "Inserts a block of raw RGE commands. Each non-empty line in the block becomes one command. Supports string interpolation with {varName}. Can be used anywhere a single ! command can, including inside functions and globalinit.",
+    example: "global *world \"1\"\n\nfunc setup {\n  [\n    trigger create 1 myTrigger\n    trigger whitelist 1 myTrigger Bots true\n    bot spawn 1 Guard 0 0 0 0 0 0\n  ]\n}" },
 ];
 </script>
 </body>
