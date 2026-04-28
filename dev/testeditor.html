@@ -1738,6 +1738,8 @@ require(['vs/editor/editor.main'], function () {
   // Expose as globals for the editor
   const _crs = (function() {
     "use strict";
+const DEBUG = false;
+const runbuilt = true;
 let compiledOutput = "";
 const islsp = globalThis.runningCRSLSP; // custom flag
 
