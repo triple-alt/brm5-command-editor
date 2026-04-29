@@ -526,7 +526,7 @@ require(['vs/editor/editor.main'], function () {
     bot: {
       params: [{name:'subtype',type:'enum',values:BOT_SUB}],
       subtypes: {
-        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rotation',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number',default:0},{name:'rY',type:'number',default:0},{name:'rZ',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
         delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
         alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts or calms all bots in the specified world.' },
         direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position using the given priority mode.' },
@@ -1269,16 +1269,16 @@ require(['vs/editor/editor.main'], function () {
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
 
-  // ── Storage key: separate cache for test vs production ──
-  // Detects test environment by hostname prefix/suffix, path segment, or ?test query param
-  const _isTestEnv = (
-    location.hostname.startsWith('test.') ||
-    location.hostname.startsWith('test-') ||
-    location.hostname.includes('.test.') ||
-    location.pathname.includes('/test') ||
-    new URLSearchParams(location.search).has('test')
-  );
-  const STORAGE_KEY = _isTestEnv ? 'cmdEditor_session_test' : 'cmdEditor_session';
+  // ── Storage key: one cache per deployment path ──
+  // Uses the directory path so /dev/ and the production path never share data.
+  // e.g. /brm5-command-editor/dev/ → cmdEditor_session_dev
+  //      /brm5-command-editor/     → cmdEditor_session_prod
+  const STORAGE_KEY = (() => {
+    const dir = location.pathname.replace(/\/[^\/]*$/, '').replace(/\/$/, '').toLowerCase() || '/';
+    // Use last path segment as label, fall back to full sanitised path
+    const label = dir.split('/').filter(Boolean).pop() || 'root';
+    return 'cmdEditor_session_' + label.replace(/[^a-z0-9_-]/g, '_');
+  })();
 
   // ── New tab type picker ──
   // Small inline dropdown that appears under the + button
