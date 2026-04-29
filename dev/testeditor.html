@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Editor</title>
+<title>Test Editor</title>
 <script>
 const CHANGELOG = [
   {
@@ -526,13 +526,13 @@ require(['vs/editor/editor.main'], function () {
     bot: {
       params: [{name:'subtype',type:'enum',values:BOT_SUB}],
       subtypes: {
-        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number',default:0},{name:'rY',type:'number',default:0},{name:'rZ',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rotation',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
         delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
         alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts or calms all bots in the specified world.' },
         direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position using the given priority mode.' },
       },
       doc: 'Spawn, delete, and control bots.',
-      example: 'bot spawn 1 Guard 0 0 0\nbot direct xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx strong 10 0 5',
+      example: 'bot spawn 1 Guard 0 0 0 0\nbot direct xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx strong 10 0 5',
     },
     world: {
       params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
