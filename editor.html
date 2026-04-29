@@ -498,7 +498,7 @@ require(['vs/editor/editor.main'], function () {
     bot: {
       params: [{name:'subtype',type:'enum',values:BOT_SUB}],
       subtypes: {
-        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawns a bot at the specified location.' },
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rotation',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
         delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
         alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts or calms all bots in the specified world.' },
         direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position using the given priority mode.' },
