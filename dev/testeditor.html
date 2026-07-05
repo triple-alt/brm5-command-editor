@@ -289,6 +289,21 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   margin-bottom: 20px; white-space: pre;
 }
 .docs-no-params { color: #444; font-size: 12px; margin-bottom: 16px; font-style: italic; }
+
+#tips-overlay .modal-box { width: 680px; }
+#tips-layout { display: flex; flex: 1; min-height: 0; }
+#tips-sidebar {
+  width: 180px; flex-shrink: 0; overflow-y: auto;
+  border-right: 1px solid #2a2a2a; padding: 8px 0;
+}
+#tips-content { flex: 1; overflow-y: auto; padding: 16px 18px; min-width: 0; }
+.tips-cat-header {
+  padding: 12px 14px 4px; font-size: 10px; color: #4a4a4a;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.tips-cat-header:first-child { padding-top: 6px; }
+.tip-para { color: #abb2bf; font-size: 12px; margin-bottom: 12px; line-height: 1.7; }
+.tip-para:last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -306,6 +321,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
         <button class="hdr-btn" id="btn-import">Import</button>
         <button class="hdr-btn" id="btn-export">Export</button>
         <button class="hdr-btn" id="btn-docs">Commands</button>
+        <button class="hdr-btn" id="btn-tips">Tips</button>
         <button class="hdr-btn" id="btn-changelog">Changelog</button>
         <span style="color: #666;">made with claude</span>
       </span>
@@ -389,6 +405,19 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   </div>
 </div>
 
+<div id="tips-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Tips</span>
+      <button class="modal-close" id="tips-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="tips-layout">
+      <div id="tips-sidebar"></div>
+      <div id="tips-content"><span style="color:#444;font-size:12px;">Select a tip.</span></div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
 <script>
 // ── Changelog ──
@@ -417,6 +446,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') {
     overlay.classList.remove('open');
     document.getElementById('docs-overlay').classList.remove('open');
+    document.getElementById('tips-overlay').classList.remove('open');
     document.getElementById('import-overlay').classList.remove('open');
     document.getElementById('close-warn-overlay').classList.remove('open');
     document.getElementById('multiexport-overlay').classList.remove('open');
@@ -568,6 +598,75 @@ require(['vs/editor/editor.main'], function () {
       example: 'navMesh editor\nnavMesh enable\nnavMesh add 0 0 0\nnavMesh join 1 2\nnavMesh cover Center 0 0 0 90',
     },
   };
+
+  // ── Tips data ──
+  // Template for a new tip — copy the object below into the TIPS array underneath it,
+  // fill in the fields, and it'll show up in the Tips modal automatically.
+  //
+  // {
+  //   title:    'Short title shown in the sidebar and as the heading',   // required
+  //   category: 'Group label shown above related tips in the sidebar',   // optional — omit to leave ungrouped
+  //   body:     'Main tip text. Leave a blank line between sentences ' + // required
+  //             'to start a new paragraph.',
+  //   example:  'optional example\nspanning multiple lines',             // optional — omit if not needed
+  // },
+
+  const TIPS = [
+    {
+      title: 'Using %variables',
+      category: 'Commands',
+      body: 'Any parameter that expects a UID (pUID, bUID, uID, etc.) also accepts a variable in the form %myVariable instead of a full xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx UID.\n\nThis is useful when chaining commands together, since you can refer to something created earlier without needing to know its generated UID ahead of time.',
+      example: 'move 1 %myPart 5 0 5 0 45 0',
+    },
+    {
+      title: 'Comments',
+      category: 'Editor',
+      body: 'Start a line with // to write a comment. Anything after // on a line is ignored and will not be validated or executed.\n\nComments are useful for leaving notes for yourself or temporarily disabling a line without deleting it.',
+      example: '// spawn the guard bot\nbot spawn 1 Guard 0 0 0',
+    },
+    {
+      title: 'Nested commands',
+      category: 'Commands',
+      body: 'Some commands, like trigger executable, take a full command as one of their parameters. Type a complete command (including its own arguments) in that slot and it will get its own autocomplete, parameter hints, and validation.',
+      example: 'trigger executable 1 myTrigger 1 hud disable',
+    },
+    {
+      title: 'Pasting coordinates',
+      category: 'Editor',
+      body: 'If you paste in coordinates that were copied with commas (like "10, 0, 5"), the editor automatically strips the commas from numeric parameters so you don\'t have to clean them up by hand.',
+    },
+    {
+      title: 'Keyboard shortcuts',
+      category: 'Editor',
+      body: 'Ctrl+Space manually triggers autocomplete suggestions.\n\nCtrl+Shift+Space manually triggers parameter hints for the command under your cursor.',
+    },
+    {
+      title: 'Managing tabs',
+      category: 'Editor',
+      body: 'Double-click a tab name to rename it. Drag a tab left or right to reorder it on the tab bar. Tabs, their contents, and their order are saved automatically, so you can safely close and reopen the editor.',
+    },
+    {
+      title: 'Import & export',
+      category: 'Editor',
+      body: 'Import accepts multiple .txt files at once — each one opens in its own new tab. Export lets you pick exactly which open tabs to download, so you don\'t have to export them one at a time.',
+    },
+    {
+      title: 'Command Reference',
+      category: 'Reference',
+      body: 'Open the Commands button in the header to browse every available command, its parameters, expected types, valid enum values, and a usage example — handy when you forget an exact parameter order.',
+    },
+    {
+      title: 'Default parameter values',
+      category: 'Commands',
+      body: 'Some parameters (like world) have a default value and can be safely omitted. Leaving one of these off will show a hint in the error panel rather than an error, so it\'s safe to ignore.',
+    },
+    {
+      title: 'NavMesh cover types',
+      category: 'Commands',
+      body: 'navMesh cover accepts five cover types, each representing a different shooting stance a bot can use at that node: Center (standing), Crouch (crouched), Right / Left (leaning around cover), and Prone (lying down).',
+      example: 'navMesh cover Center 0 0 0 90\nnavMesh cover Crouch 2 0 0 90',
+    },
+  ];
 
   // ── Tab manager ──
   let tabCounter = 0;
@@ -1419,6 +1518,50 @@ require(['vs/editor/editor.main'], function () {
       if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
     });
     document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  })();
+
+  // ── Tips modal ──
+  (function initTips() {
+    const overlay  = document.getElementById('tips-overlay');
+    const sidebar  = document.getElementById('tips-sidebar');
+    const content  = document.getElementById('tips-content');
+    let activeBtn  = null;
+
+    function renderTip(tip) {
+      let html = `<div class="docs-cmd-name">${tip.title}</div>`;
+      if (tip.category) html += `<div class="docs-section-title">${tip.category}</div>`;
+      const paragraphs = tip.body.split(/\n\s*\n/);
+      html += paragraphs.map(p => `<div class="tip-para">${p}</div>`).join('');
+      if (tip.example) html += `<div class="docs-section-title" style="margin-top:4px;">example</div><div class="docs-example">${tip.example}</div>`;
+      content.innerHTML = html;
+    }
+
+    let lastCategory = null;
+    TIPS.forEach(tip => {
+      if (tip.category && tip.category !== lastCategory) {
+        const catEl = document.createElement('div');
+        catEl.className = 'tips-cat-header';
+        catEl.textContent = tip.category;
+        sidebar.appendChild(catEl);
+        lastCategory = tip.category;
+      }
+      const btn = document.createElement('button');
+      btn.className = 'docs-cmd-btn';
+      btn.textContent = tip.title;
+      btn.addEventListener('click', () => {
+        if (activeBtn) activeBtn.classList.remove('active');
+        activeBtn = btn; btn.classList.add('active');
+        renderTip(tip);
+      });
+      sidebar.appendChild(btn);
+    });
+
+    document.getElementById('btn-tips').addEventListener('click', () => {
+      overlay.classList.add('open');
+      if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
+    });
+    document.getElementById('tips-close').addEventListener('click', () => overlay.classList.remove('open'));
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
   })();
 
