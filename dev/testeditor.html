@@ -622,15 +622,24 @@ require(['vs/editor/editor.main'], function () {
   const TIPS = [
     {
       title: 'AI & Explosions',
-      category: 'Commands',
+      category: 'AI',
       body: 'Something about how you can use explosions for various things relating to AI.',
-      example: 'move 1 %myPart 5 0 5 0 45 0',
+    },
+    {
+      title: 'Using NavMesh',
+      category: 'AI',
+      body: 'a breakdown of how to use NavMesh',
+    },
+    {
+      title: 'Creating enemy compounds',
+      category: 'AI',
+      body: 'an explanation of how the system by fen0612 works',
+      example: '//compoundStealth trigger:    //spawn stealth bots (initial bots). Optional 1 (one) patrol bot.    // spawn RAID bot in spaceLogic2.  //compoundRaidTrigger trigger  //compoundRaidSpawn trigger    //Load Unload logic//  //(trigger) ##compoundPassiveProximity##    //run compoundStealth, spawns starting bots    trigger activate 650 compoundStealthSpawn    //run compoundClock    trigger whitelist 650 compoundClock IsLooping true    // part-block the BoolTrue trigger and the BoolFalse trigger for the first run.    move 650 %compoundBooleanPart 80 1018 -6 -0 0 0    move 650 %firstRunPart 80 1018 -6 -0 0 0  //(trigger) ##compoundActiveProximity##    move 650 %compoundBooleanPart 80 1018 -6 -0 0 0    wait 0.1    reset    //(trigger) ##compoundClock##    move 650 %compoundBooleanPart 80 1018 6 -0 0 0    move 650 %playerProximityActive -600 1020 0 -0 0 0    wait 1    trigger activate 650 compoundBoolSignal    wait 1    move 650 %playerProximityActive 0 1020 -150 -0 0 0    wait 1    trigger activate 650 firstRun    //##Boolean Components##:  //(trigger) compoundBoolSignal:    // spawn 2 bots in a self-contained phsyical space, now noted as logic1.    bot spawn 650 PL5_Rifleman 80 1022 6 0    bot spawn 650 PL5_Rifleman 80 1022 -6 0    wait 0.001    reset  //(trigger) ##compoundBoolTrue##    trigger activate 650 compoundBoolKill    move 650 %compoundBooleanPart 80 1018 -6 -0 0 0  //(trigger) ##compoundBoolFalse## (you can combine STOPMETHOD here instead of having it be its own function, to reduce trigger space)    move 650 %compoundBooleanPart 80 1018 6 -0 0 0    trigger activate 650 compoundBoolKill    trigger activate 650 compoundStopMethod1 //{compoundStopMethod1,compoundStopMethod2} here. Recommended method: explosives    //trigger whitelist 650 compoundReinforcementsConst isLooping false (NOT DEVELOPPED YET, EXPECTED TO SIMULATE 1 MINUTE CONSTANT REINFORCEMENT WITHOUT AN UPPER BOUND LIMIT DUE TO NOT BEING ABLE TO COUNT OPFOR ON SITE)  //(trigger) ##compoundBoolKill##    collision 650 %compoundBooleanPart 1    explosion 18 300 79.000 1017.000 0.000 Flash    wait 0.001    collision 650 %compoundBooleanPart 0    wait 0.001    trigger reset 650 compoundBoolFalse    trigger reset 650 compoundBoolTrue    reset  //(trigger) ##firstRun##    move 650 %firstRunPart 88 1018 -6 -0 0 0    trigger whitelist 650 compoundActiveProximity IsLooping false    wait 0.1    reset  //(trigger) ##compoundStopMethod2##    trigger whitelist 650 compoundClock IsLooping false    move 650 %playerProximityPassive -600 1020 0 -0 0 0    move 650 %playerProximityPassive -600 1020 0 -0 0 0    explosion 100 300 -600.000 1050.000 0.000 Flash    trigger reset 650 compoundPassiveProximity    wait 1    // resetting raid boolean    explosion 50 300 -590 1014 66 Flash    bot alert 651 false    trigger reset 650 compoundRaidTrigger'
     },
     {
       title: 'Making circles',
-      category: 'Commands',
-      body: 'Something about how you can use explosions for various things relating to AI.',
-      example: 'move 1 %myPart 5 0 5 0 45 0',
+      category: 'QoL',
+      body: 'Making circles is easy and there is a video guide for it. Link: https://www.youtube.com/watch?v=ZaW3tEeWmjc',
     },
     {
       title: 'Pasting coordinates',
@@ -652,7 +661,13 @@ require(['vs/editor/editor.main'], function () {
       category: 'Editor',
       body: 'Import accepts multiple .txt files at once — each one opens in its own new tab. Export lets you pick exactly which open tabs to download, so you don\'t have to export them one at a time.',
     },
-
+    {
+      title: 'Comments',
+      category: 'Editor',
+      body: 'Start a line with // to write a comment. Anything after // on a line is ignored and will not be validated or executed.\n\nComments are useful for leaving notes for yourself or temporarily disabling a line without deleting it.',
+      example: '// create initial part\ncreate 1 part 1 1 1',
+    },
+    
   ];
 
   // ── Tab manager ──
