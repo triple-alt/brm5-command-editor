@@ -312,6 +312,24 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .tips-cat-header:first-child { padding-top: 6px; }
 .tip-para { color: #abb2bf; font-size: 12px; margin-bottom: 12px; line-height: 1.7; }
 .tip-para:last-child { margin-bottom: 0; }
+.tip-meta { color: #666; font-size: 11px; margin-bottom: 10px; }
+.tip-example-box {
+  border: 1px solid #2a2a2a; border-radius: 4px; overflow: hidden;
+  background: #161616; margin-bottom: 16px;
+}
+.tip-example-mount { height: 28px; transition: height 0.15s ease; }
+.tip-example-toolbar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 4px 6px; background: #1a1a1a; border-top: 1px solid #2a2a2a;
+}
+.tip-example-btn {
+  background: none; border: 1px solid #333; color: #777;
+  font-family: Consolas, monospace; font-size: 10px; padding: 2px 8px;
+  cursor: pointer; border-radius: 3px;
+}
+.tip-example-btn:hover { background: #252525; color: #abb2bf; border-color: #555; }
+.tip-example-btn.primary { border-color: #2a4a5a; color: #61afef; }
+.tip-example-btn.primary:hover { background: #1a3a4a; border-color: #61afef; }
 </style>
 </head>
 <body>
@@ -614,10 +632,15 @@ require(['vs/editor/editor.main'], function () {
   // {
   //   title:    'Short title shown in the sidebar and as the heading',   // required
   //   category: 'Group label shown above related tips in the sidebar',   // optional — omit to leave ungrouped
+  //   author:   'Your name',                                             // optional — shown under the title
+  //   credit:   'Where this tip/trick came from',                        // optional — shown under the title
   //   body:     'Main tip text. Leave a blank line between sentences ' + // required
   //             'to start a new paragraph.',
-  //   example:  'optional example\nspanning multiple lines',             // optional — omit if not needed
+  //   example:  'optional example\nspanning multiple lines',             // optional — renders as a real
+  //                                                                       // read-only, syntax-highlighted
+  //                                                                       // editor box with an "Open in Editor" button
   // },
+
 
   const TIPS = [
     {
@@ -1529,14 +1552,79 @@ require(['vs/editor/editor.main'], function () {
     const sidebar  = document.getElementById('tips-sidebar');
     const content  = document.getElementById('tips-content');
     let activeBtn  = null;
+    let exampleEditor = null;
+
+    function disposeExampleEditor() {
+      if (exampleEditor) { exampleEditor.dispose(); exampleEditor = null; }
+    }
 
     function renderTip(tip) {
+      disposeExampleEditor();
+
       let html = `<div class="docs-cmd-name">${tip.title}</div>`;
+
+      const metaParts = [];
+      if (tip.author) metaParts.push(`by ${tip.author}`);
+      if (tip.credit) metaParts.push(`Credit: ${tip.credit}`);
+      if (metaParts.length) html += `<div class="tip-meta">${metaParts.join(' &middot; ')}</div>`;
+
       if (tip.category) html += `<div class="docs-section-title">${tip.category}</div>`;
+
       const paragraphs = tip.body.split(/\n\s*\n/);
       html += paragraphs.map(p => `<div class="tip-para">${p}</div>`).join('');
-      if (tip.example) html += `<div class="docs-section-title" style="margin-top:4px;">example</div><div class="docs-example">${tip.example}</div>`;
+
+      if (tip.example) {
+        html += `<div class="docs-section-title" style="margin-top:4px;">example</div>
+          <div class="tip-example-box">
+            <div class="tip-example-mount" id="tip-example-mount"></div>
+            <div class="tip-example-toolbar">
+              <button class="tip-example-btn" id="tip-example-toggle">&#9662; Show more</button>
+              <button class="tip-example-btn primary" id="tip-example-open">&#8599; Open in Editor</button>
+            </div>
+          </div>`;
+      }
+
       content.innerHTML = html;
+
+      if (tip.example) {
+        const mount = document.getElementById('tip-example-mount');
+        const lineHeight = 19;
+        const linePad = 10;
+        const lineCount = tip.example.split('\n').length;
+        const collapsedHeight = lineHeight + linePad;
+        const naturalHeight = lineCount * lineHeight + linePad;
+        const expandedHeight = Math.min(naturalHeight, 220);
+        let isExpanded = false;
+
+        mount.style.height = collapsedHeight + 'px';
+
+        exampleEditor = monaco.editor.create(mount, {
+          value: tip.example, language: LANG, theme: 'cmdDark',
+          readOnly: true, domReadOnly: true, contextmenu: false,
+          minimap: { enabled: false }, scrollBeyondLastLine: false,
+          lineNumbers: 'on', fontSize: 13, wordWrap: 'off',
+          renderLineHighlight: 'none', overviewRulerLanes: 0,
+          folding: false, glyphMargin: false,
+          scrollbar: { alwaysConsumeMouseWheel: false },
+        });
+
+        const toggleBtn = document.getElementById('tip-example-toggle');
+        if (naturalHeight <= collapsedHeight + 1) {
+          toggleBtn.style.display = 'none';
+        } else {
+          toggleBtn.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            mount.style.height = (isExpanded ? expandedHeight : collapsedHeight) + 'px';
+            toggleBtn.innerHTML = isExpanded ? '&#9652; Show less' : '&#9662; Show more';
+            requestAnimationFrame(() => exampleEditor && exampleEditor.layout());
+          });
+        }
+
+        document.getElementById('tip-example-open').addEventListener('click', () => {
+          createTab(tip.title, tip.example);
+          overlay.classList.remove('open');
+        });
+      }
     }
 
     let lastCategory = null;
