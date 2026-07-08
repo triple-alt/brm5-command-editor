@@ -632,6 +632,27 @@ require(['vs/editor/editor.main'], function () {
       body: 'Something about how you can use explosions for various things relating to AI.',
       example: 'move 1 %myPart 5 0 5 0 45 0',
     },
+    {
+      title: 'Pasting coordinates',
+      category: 'Editor',
+      body: 'If you paste in coordinates that were copied with commas (like "10, 0, 5"), the editor automatically strips the commas from numeric parameters so you don\'t have to clean them up by hand.',
+    },
+    {
+      title: 'Keyboard shortcuts',
+      category: 'Editor',
+      body: 'Ctrl+Space manually triggers autocomplete suggestions.\n\nCtrl+Shift+Space manually triggers parameter hints for the command under your cursor.',
+    },
+    {
+      title: 'Managing tabs',
+      category: 'Editor',
+      body: 'Double-click a tab name to rename it. Drag a tab left or right to reorder it on the tab bar. Tabs, their contents, and their order are saved automatically, so you can safely close and reopen the editor.',
+    },
+    {
+      title: 'Import & export',
+      category: 'Editor',
+      body: 'Import accepts multiple .txt files at once — each one opens in its own new tab. Export lets you pick exactly which open tabs to download, so you don\'t have to export them one at a time.',
+    },
+
   ];
 
   // ── Tab manager ──
