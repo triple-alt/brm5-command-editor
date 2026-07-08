@@ -7,15 +7,23 @@
 <script>
 const CHANGELOG = [
   {
+    version: "Tips and Tricks menu",
+    date: "05/07/2026",
+    changes: [
+      { type: "new", text: "Added tips menu." },
+      { type: "change", text: "Various changes to commands menu." },
+    ]
+  },
+  {
     version: "NavMesh & Command Tab improvements",
-    date: "05/07/2025",
+    date: "05/07/2026",
     changes: [
       { type: "new", text: "Added navmesh related commands." },
     ]
   },
   {
     version: "Persistent Editor Tabs",
-    date: "15/04/2025",
+    date: "15/04/2026",
     changes: [
       { type: "new", text: "Editor tabs are now persistent and you aren't prompted to save." },
       { type: "change", text: "Editor tabs are moveable on the tab bar." },
@@ -23,7 +31,7 @@ const CHANGELOG = [
   },
   {
     version: "Weather Command and QOL additions",
-    date: "12/04/2025",
+    date: "12/04/2026",
     changes: [
       { type: "new", text: "Added weather command." },
       { type: "new", text: "Editor supports multiple tabs, renaming and nice importing/exporting." },
@@ -31,7 +39,7 @@ const CHANGELOG = [
   },
   {
     version: "Added spawn command",
-    date: "09/04/2025",
+    date: "09/04/2026",
     changes: [
       { type: "new", text: "Added spawn command." },
       { type: "change", text: "Added (hopefully) all props under 'propName' parameter of the spawn command." },
@@ -40,7 +48,7 @@ const CHANGELOG = [
   },
   {
     version: "Added hidden commands",
-    date: "07/04/2025",
+    date: "07/04/2026",
     changes: [
       { type: "new", text: "Added collision, teleport and bot commands." },
       { type: "new", text: "Added // comment support." },
@@ -613,58 +621,16 @@ require(['vs/editor/editor.main'], function () {
 
   const TIPS = [
     {
-      title: 'Using %variables',
+      title: 'AI & Explosions',
       category: 'Commands',
-      body: 'Any parameter that expects a UID (pUID, bUID, uID, etc.) also accepts a variable in the form %myVariable instead of a full xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx UID.\n\nThis is useful when chaining commands together, since you can refer to something created earlier without needing to know its generated UID ahead of time.',
+      body: 'Something about how you can use explosions for various things relating to AI.',
       example: 'move 1 %myPart 5 0 5 0 45 0',
     },
     {
-      title: 'Comments',
-      category: 'Editor',
-      body: 'Start a line with // to write a comment. Anything after // on a line is ignored and will not be validated or executed.\n\nComments are useful for leaving notes for yourself or temporarily disabling a line without deleting it.',
-      example: '// spawn the guard bot\nbot spawn 1 Guard 0 0 0',
-    },
-    {
-      title: 'Nested commands',
+      title: 'Making circles',
       category: 'Commands',
-      body: 'Some commands, like trigger executable, take a full command as one of their parameters. Type a complete command (including its own arguments) in that slot and it will get its own autocomplete, parameter hints, and validation.',
-      example: 'trigger executable 1 myTrigger 1 hud disable',
-    },
-    {
-      title: 'Pasting coordinates',
-      category: 'Editor',
-      body: 'If you paste in coordinates that were copied with commas (like "10, 0, 5"), the editor automatically strips the commas from numeric parameters so you don\'t have to clean them up by hand.',
-    },
-    {
-      title: 'Keyboard shortcuts',
-      category: 'Editor',
-      body: 'Ctrl+Space manually triggers autocomplete suggestions.\n\nCtrl+Shift+Space manually triggers parameter hints for the command under your cursor.',
-    },
-    {
-      title: 'Managing tabs',
-      category: 'Editor',
-      body: 'Double-click a tab name to rename it. Drag a tab left or right to reorder it on the tab bar. Tabs, their contents, and their order are saved automatically, so you can safely close and reopen the editor.',
-    },
-    {
-      title: 'Import & export',
-      category: 'Editor',
-      body: 'Import accepts multiple .txt files at once — each one opens in its own new tab. Export lets you pick exactly which open tabs to download, so you don\'t have to export them one at a time.',
-    },
-    {
-      title: 'Command Reference',
-      category: 'Reference',
-      body: 'Open the Commands button in the header to browse every available command, its parameters, expected types, valid enum values, and a usage example — handy when you forget an exact parameter order.',
-    },
-    {
-      title: 'Default parameter values',
-      category: 'Commands',
-      body: 'Some parameters (like world) have a default value and can be safely omitted. Leaving one of these off will show a hint in the error panel rather than an error, so it\'s safe to ignore.',
-    },
-    {
-      title: 'NavMesh cover types',
-      category: 'Commands',
-      body: 'navMesh cover accepts five cover types, each representing a different shooting stance a bot can use at that node: Center (standing), Crouch (crouched), Right / Left (leaning around cover), and Prone (lying down).',
-      example: 'navMesh cover Center 0 0 0 90\nnavMesh cover Crouch 2 0 0 90',
+      body: 'Something about how you can use explosions for various things relating to AI.',
+      example: 'move 1 %myPart 5 0 5 0 45 0',
     },
   ];
 
