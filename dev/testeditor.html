@@ -657,7 +657,7 @@ require(['vs/editor/editor.main'], function () {
       title: 'Creating enemy compounds',
       category: 'AI',
       body: 'an explanation of how the system by fen0612 works',
-      example: '//compoundStealth trigger:    //spawn stealth bots (initial bots). Optional 1 (one) patrol bot.    // spawn RAID bot in spaceLogic2.  //compoundRaidTrigger trigger  //compoundRaidSpawn trigger    //Load Unload logic//  //(trigger) ##compoundPassiveProximity##    //run compoundStealth, spawns starting bots    trigger activate 650 compoundStealthSpawn    //run compoundClock    trigger whitelist 650 compoundClock IsLooping true    // part-block the BoolTrue trigger and the BoolFalse trigger for the first run.    move 650 %compoundBooleanPart 80 1018 -6 -0 0 0    move 650 %firstRunPart 80 1018 -6 -0 0 0  //(trigger) ##compoundActiveProximity##    move 650 %compoundBooleanPart 80 1018 -6 -0 0 0    wait 0.1    reset    //(trigger) ##compoundClock##    move 650 %compoundBooleanPart 80 1018 6 -0 0 0    move 650 %playerProximityActive -600 1020 0 -0 0 0    wait 1    trigger activate 650 compoundBoolSignal    wait 1    move 650 %playerProximityActive 0 1020 -150 -0 0 0    wait 1    trigger activate 650 firstRun    //##Boolean Components##:  //(trigger) compoundBoolSignal:    // spawn 2 bots in a self-contained phsyical space, now noted as logic1.    bot spawn 650 PL5_Rifleman 80 1022 6 0    bot spawn 650 PL5_Rifleman 80 1022 -6 0    wait 0.001    reset  //(trigger) ##compoundBoolTrue##    trigger activate 650 compoundBoolKill    move 650 %compoundBooleanPart 80 1018 -6 -0 0 0  //(trigger) ##compoundBoolFalse## (you can combine STOPMETHOD here instead of having it be its own function, to reduce trigger space)    move 650 %compoundBooleanPart 80 1018 6 -0 0 0    trigger activate 650 compoundBoolKill    trigger activate 650 compoundStopMethod1 //{compoundStopMethod1,compoundStopMethod2} here. Recommended method: explosives    //trigger whitelist 650 compoundReinforcementsConst isLooping false (NOT DEVELOPPED YET, EXPECTED TO SIMULATE 1 MINUTE CONSTANT REINFORCEMENT WITHOUT AN UPPER BOUND LIMIT DUE TO NOT BEING ABLE TO COUNT OPFOR ON SITE)  //(trigger) ##compoundBoolKill##    collision 650 %compoundBooleanPart 1    explosion 18 300 79.000 1017.000 0.000 Flash    wait 0.001    collision 650 %compoundBooleanPart 0    wait 0.001    trigger reset 650 compoundBoolFalse    trigger reset 650 compoundBoolTrue    reset  //(trigger) ##firstRun##    move 650 %firstRunPart 88 1018 -6 -0 0 0    trigger whitelist 650 compoundActiveProximity IsLooping false    wait 0.1    reset  //(trigger) ##compoundStopMethod2##    trigger whitelist 650 compoundClock IsLooping false    move 650 %playerProximityPassive -600 1020 0 -0 0 0    move 650 %playerProximityPassive -600 1020 0 -0 0 0    explosion 100 300 -600.000 1050.000 0.000 Flash    trigger reset 650 compoundPassiveProximity    wait 1    // resetting raid boolean    explosion 50 300 -590 1014 66 Flash    bot alert 651 false    trigger reset 650 compoundRaidTrigger'
+      example: '//compoundStealth trigger:  //spawn stealth bots (initial bots). Optional 1 (one) patrol bot.  // spawn RAID bot in spaceLogic2.//compoundRaidTrigger trigger//compoundRaidSpawn trigger//Load Unload logic////(trigger) ##compoundPassiveProximity##  //run compoundStealth, spawns starting bots  trigger activate 650 compoundStealthSpawn  //run compoundClock  trigger whitelist 650 compoundClock IsLooping true  // part-block the BoolTrue trigger and the BoolFalse trigger for the first run.  move 650 %compoundBooleanPart 80 1018 -6 -0 0 0  move 650 %firstRunPart 80 1018 -6 -0 0 0//(trigger) ##compoundActiveProximity##  move 650 %compoundBooleanPart 80 1018 -6 -0 0 0  wait 0.1  reset//(trigger) ##compoundClock##  move 650 %compoundBooleanPart 80 1018 6 -0 0 0  move 650 %playerProximityActive -600 1020 0 -0 0 0  wait 1  trigger activate 650 compoundBoolSignal  wait 1  move 650 %playerProximityActive 0 1020 -150 -0 0 0  wait 1  trigger activate 650 firstRun//##Boolean Components##://(trigger) compoundBoolSignal:  // spawn 2 bots in a self-contained phsyical space, now noted as logic1.  bot spawn 650 PL5_Rifleman 80 1022 6 0  bot spawn 650 PL5_Rifleman 80 1022 -6 0  wait 0.001  reset//(trigger) ##compoundBoolTrue##  trigger activate 650 compoundBoolKill  move 650 %compoundBooleanPart 80 1018 -6 -0 0 0//(trigger) ##compoundBoolFalse## (you can combine STOPMETHOD here instead of having it be its own function, to reduce trigger space)  move 650 %compoundBooleanPart 80 1018 6 -0 0 0  trigger activate 650 compoundBoolKill  trigger activate 650 compoundStopMethod1 //{compoundStopMethod1,compoundStopMethod2} here. Recommended method: explosives  //trigger whitelist 650 compoundReinforcementsConst isLooping false (NOT DEVELOPPED YET, EXPECTED TO SIMULATE 1 MINUTE CONSTANT REINFORCEMENT WITHOUT AN UPPER BOUND LIMIT DUE TO NOT BEING ABLE TO COUNT OPFOR ON SITE)//(trigger) ##compoundBoolKill##  collision 650 %compoundBooleanPart 1  explosion 18 300 79.000 1017.000 0.000 Flash  wait 0.001  collision 650 %compoundBooleanPart 0  wait 0.001  trigger reset 650 compoundBoolFalse  trigger reset 650 compoundBoolTrue  reset//(trigger) ##firstRun##  move 650 %firstRunPart 88 1018 -6 -0 0 0  trigger whitelist 650 compoundActiveProximity IsLooping false  wait 0.1  reset//(trigger) ##compoundStopMethod2##  trigger whitelist 650 compoundClock IsLooping false  move 650 %playerProximityPassive -600 1020 0 -0 0 0  move 650 %playerProximityPassive -600 1020 0 -0 0 0  explosion 100 300 -600.000 1050.000 0.000 Flash  trigger reset 650 compoundPassiveProximity  wait 1  // resetting raid boolean  explosion 50 300 -590 1014 66 Flash  bot alert 651 false  trigger reset 650 compoundRaidTrigger'
     },
     {
       title: 'Making circles',
@@ -1334,6 +1334,27 @@ require(['vs/editor/editor.main'], function () {
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
   editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
 
+  // ── Command-block formatter ──
+  // Best-effort reformatter for command text that lost its line breaks (e.g. text
+  // that was pasted through something that flattened it to one line). It uses two
+  // rules learned from how this flattening tends to happen in practice:
+  //  1. "//" always starts a new line, wherever it appears.
+  //  2. A known top-level command keyword starts a new line only when it's preceded
+  //     by 2+ spaces — a single space means it's an argument of the current command
+  //     (e.g. "trigger reset ..." or "trigger create ..." must stay on one line,
+  //     since 'reset'/'create' are also valid trigger subtypes).
+  const CMD_KEYWORDS = Object.keys(CMDS);
+  const CMD_BREAK_RE = new RegExp('[ \\t]{2,}(' + CMD_KEYWORDS.join('|') + ')\\b', 'gi');
+
+  function formatCommandText(raw) {
+    if (!raw) return raw;
+    let text = raw.replace(/\/\//g, '\n//');
+    text = text.replace(CMD_BREAK_RE, '\n$1');
+    const lines = text.split('\n').map(line => line.trim().replace(/[ \t]{2,}/g, ' '));
+    while (lines.length && lines[0] === '') lines.shift();
+    return lines.join('\n');
+  }
+
   // ── New tab button ──
   document.getElementById('btn-new-tab').addEventListener('click', () => { createTab(); saveSession(); });
 
@@ -1573,7 +1594,9 @@ require(['vs/editor/editor.main'], function () {
       const paragraphs = tip.body.split(/\n\s*\n/);
       html += paragraphs.map(p => `<div class="tip-para">${p}</div>`).join('');
 
-      if (tip.example) {
+      const formattedExample = tip.example ? formatCommandText(tip.example) : null;
+
+      if (formattedExample) {
         html += `<div class="docs-section-title" style="margin-top:4px;">example</div>
           <div class="tip-example-box">
             <div class="tip-example-mount" id="tip-example-mount"></div>
@@ -1586,11 +1609,11 @@ require(['vs/editor/editor.main'], function () {
 
       content.innerHTML = html;
 
-      if (tip.example) {
+      if (formattedExample) {
         const mount = document.getElementById('tip-example-mount');
         const lineHeight = 19;
         const linePad = 10;
-        const lineCount = tip.example.split('\n').length;
+        const lineCount = formattedExample.split('\n').length;
         const collapsedHeight = lineHeight + linePad;
         const naturalHeight = lineCount * lineHeight + linePad;
         const expandedHeight = Math.min(naturalHeight, 220);
@@ -1599,7 +1622,7 @@ require(['vs/editor/editor.main'], function () {
         mount.style.height = collapsedHeight + 'px';
 
         exampleEditor = monaco.editor.create(mount, {
-          value: tip.example, language: LANG, theme: 'cmdDark',
+          value: formattedExample, language: LANG, theme: 'cmdDark',
           readOnly: true, domReadOnly: true, contextmenu: false,
           minimap: { enabled: false }, scrollBeyondLastLine: false,
           lineNumbers: 'on', fontSize: 13, wordWrap: 'off',
@@ -1621,7 +1644,7 @@ require(['vs/editor/editor.main'], function () {
         }
 
         document.getElementById('tip-example-open').addEventListener('click', () => {
-          createTab(tip.title, tip.example);
+          createTab(tip.title, formattedExample);
           overlay.classList.remove('open');
         });
       }
