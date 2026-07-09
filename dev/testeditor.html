@@ -312,6 +312,8 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .tips-cat-header:first-child { padding-top: 6px; }
 .tip-para { color: #abb2bf; font-size: 12px; margin-bottom: 12px; line-height: 1.7; }
 .tip-para:last-child { margin-bottom: 0; }
+.tip-link { color: #61afef; text-decoration: none; border-bottom: 1px solid rgba(97,175,239,0.4); }
+.tip-link:hover { color: #8ec9ff; border-bottom-color: #8ec9ff; }
 .tip-meta { color: #666; font-size: 11px; margin-bottom: 10px; }
 .tip-example-box {
   border: 1px solid #2a2a2a; border-radius: 4px; overflow: hidden;
@@ -497,7 +499,7 @@ require(['vs/editor/editor.main'], function () {
   const WEATHER_TYPE    = ['ClearSky','RonoClearSky','Overcast1','Overcast2','Overcast3','Fog1','Fog2','Fog3','Rain1','Rain2','Rain3','Storm1','Storm2','Storm3'];
   const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','savemodel','deletemodel','insertmodel'];
   const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
-  const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','IsLooping'];
+  const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','isLooping'];
   const SQUAD_TYPES     = ['none','red','blue','orange','yellow','green'];
   const COLLISION_TYPES = ['0','1','2','3'];
   const TELEPORT_TYPES  = ['all','squad','player','other'];
@@ -635,7 +637,9 @@ require(['vs/editor/editor.main'], function () {
   //   author:   'Your name',                                             // optional — shown under the title
   //   credit:   'Where this tip/trick came from',                        // optional — shown under the title
   //   body:     'Main tip text. Leave a blank line between sentences ' + // required
-  //             'to start a new paragraph.',
+  //             'to start a new paragraph. Links work two ways: bare ' +
+  //             'URLs (https://example.com) auto-link as-is, or use ' +
+  //             '[label text](https://example.com) for a custom label.',
   //   example:  'optional example\nspanning multiple lines',             // optional — renders as a real
   //                                                                       // read-only, syntax-highlighted
   //                                                                       // editor box with an "Open in Editor" button
@@ -662,7 +666,7 @@ require(['vs/editor/editor.main'], function () {
     {
       title: 'Making circles',
       category: 'QoL',
-      body: 'Making circles is easy and there is a video guide for it. Link: https://www.youtube.com/watch?v=ZaW3tEeWmjc',
+      body: 'Making circles is easy and there is a video guide for it: [YouTube tutorial](https://www.youtube.com/watch?v=ZaW3tEeWmjc)',
     },
     {
       title: 'Pasting coordinates',
@@ -713,7 +717,8 @@ require(['vs/editor/editor.main'], function () {
       root: [
         [/\/\/.*$/, 'comment'],
         [/\b(create|tween|bot|color|spawn|weather|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file|navMesh)\b/, 'keyword'],
-        [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
+        [/(?<=\bfirstperson[ \t]+)\b(lock|unlock)\b/, 'constant'],
+        [/\b(true|false|enable|disable|all)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...NAVMESH_SUB,...NAVMESH_COVER_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
         [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
@@ -1355,6 +1360,45 @@ require(['vs/editor/editor.main'], function () {
     return lines.join('\n');
   }
 
+  // ── Text helpers for rendering tip bodies safely ──
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Converts plain text into safe HTML, turning URLs into clickable links.
+  // Supports bare URLs (https://example.com) and markdown-style [label](url) links.
+  function linkifyText(raw) {
+    const placeholders = [];
+    const stash = (html) => {
+      const token = '\u0000LINK' + placeholders.length + '\u0000';
+      placeholders.push(html);
+      return token;
+    };
+
+    // Markdown-style [label](url) links, pulled out first so their url isn't
+    // double-processed by the bare-URL pass below.
+    let working = raw.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (match, label, url) =>
+      stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="tip-link">${escapeHtml(label)}</a>`)
+    );
+
+    // Bare URLs. Trailing punctuation (., ,, ), etc.) is kept outside the link
+    // since it's usually sentence punctuation, not part of the URL.
+    working = working.replace(/\bhttps?:\/\/[^\s<>"']+/g, (match) => {
+      let url = match;
+      let trailing = '';
+      const trailMatch = url.match(/[).,;:!?\]]+$/);
+      if (trailMatch) { trailing = trailMatch[0]; url = url.slice(0, -trailing.length); }
+      return stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="tip-link">${escapeHtml(url)}</a>`) + trailing;
+    });
+
+    // Escape everything else, then splice the pre-built link HTML back in
+    // (placeholder tokens use \u0000, which escapeHtml leaves untouched).
+    let escaped = escapeHtml(working);
+    escaped = escaped.replace(/\u0000LINK(\d+)\u0000/g, (match, idx) => placeholders[Number(idx)]);
+    return escaped;
+  }
+
   // ── New tab button ──
   document.getElementById('btn-new-tab').addEventListener('click', () => { createTab(); saveSession(); });
 
@@ -1592,7 +1636,7 @@ require(['vs/editor/editor.main'], function () {
       if (tip.category) html += `<div class="docs-section-title">${tip.category}</div>`;
 
       const paragraphs = tip.body.split(/\n\s*\n/);
-      html += paragraphs.map(p => `<div class="tip-para">${p}</div>`).join('');
+      html += paragraphs.map(p => `<div class="tip-para">${linkifyText(p)}</div>`).join('');
 
       const formattedExample = tip.example ? formatCommandText(tip.example) : null;
 
