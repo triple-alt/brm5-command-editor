@@ -1635,11 +1635,17 @@ require(['vs/editor/editor.main'], function () {
         if (naturalHeight <= collapsedHeight + 1) {
           toggleBtn.style.display = 'none';
         } else {
+          mount.addEventListener('transitionend', (e) => {
+            if (e.propertyName === 'height' && exampleEditor) exampleEditor.layout();
+          });
           toggleBtn.addEventListener('click', () => {
             isExpanded = !isExpanded;
-            mount.style.height = (isExpanded ? expandedHeight : collapsedHeight) + 'px';
+            const targetHeight = isExpanded ? expandedHeight : collapsedHeight;
+            mount.style.height = targetHeight + 'px';
             toggleBtn.innerHTML = isExpanded ? '&#9652; Show less' : '&#9662; Show more';
-            requestAnimationFrame(() => exampleEditor && exampleEditor.layout());
+            // Force an immediate relayout at the target size rather than waiting on
+            // the CSS transition (which would otherwise get a stale, mid-animation size).
+            if (exampleEditor) exampleEditor.layout({ width: mount.clientWidth, height: targetHeight });
           });
         }
 
