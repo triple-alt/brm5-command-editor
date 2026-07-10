@@ -332,8 +332,21 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .tip-example-btn:hover { background: #252525; color: #abb2bf; border-color: #555; }
 .tip-example-btn.primary { border-color: #2a4a5a; color: #61afef; }
 .tip-example-btn.primary:hover { background: #1a3a4a; border-color: #61afef; }
+.tip-video-box {
+  border: 1px solid #2a2a2a; border-radius: 4px; overflow: hidden;
+  background: #000; margin-bottom: 16px;
+}
+.tip-video-box video {
+  display: block; width: 100%; max-height: 360px; background: #000;
+}
+.tip-video-missing {
+  border: 1px dashed #3a2a2a; border-radius: 4px; padding: 8px 12px;
+  font-family: Consolas, monospace; font-size: 11px; color: #e06c75;
+  margin-bottom: 16px; background: #1e1616;
+}
 </style>
 </head>
+
 <body>
 <div id="app">
   <div id="tab-bar">
@@ -651,6 +664,12 @@ require(['vs/editor/editor.main'], function () {
   //   example:  `optional example\nspanning multiple lines`,             // optional — renders as a real
   //                                                                       // read-only, syntax-highlighted
   //                                                                       // editor box with an "Open in Editor" button
+  //   video:    `media/videos/example.mp4`,                              // optional — path to an .mp4,
+  //                                                                       // relative to THIS HTML file
+  //                                                                       // (not the current page), rendered
+  //                                                                       // as a native <video controls>
+  //                                                                       // player. Can also be an array of
+  //                                                                       // paths to show several videos.
   // },
 
 
@@ -742,6 +761,7 @@ require(['vs/editor/editor.main'], function () {
     suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on',
     autoClosingBrackets: 'never', autoClosingQuotes: 'never',
     inlayHints: { enabled: 'on' },
+    automaticLayout: true,
   });
 
   // ── Tab drag-to-reorder ──
@@ -1641,6 +1661,12 @@ require(['vs/editor/editor.main'], function () {
       const paragraphs = tip.body.split(/\n\s*\n/);
       html += paragraphs.map(p => `<div class="tip-para">${linkifyText(p)}</div>`).join('');
 
+      const videos = tip.video ? (Array.isArray(tip.video) ? tip.video : [tip.video]) : [];
+      html += videos.map((src, i) => `
+        <div class="tip-video-box" id="tip-video-box-${i}">
+          <video controls preload="metadata" id="tip-video-${i}" src="${escapeHtml(src)}"></video>
+        </div>`).join('');
+
       const formattedExample = tip.example ? formatCommandText(tip.example) : null;
 
       if (formattedExample) {
@@ -1655,6 +1681,15 @@ require(['vs/editor/editor.main'], function () {
       }
 
       content.innerHTML = html;
+
+      videos.forEach((src, i) => {
+        const videoEl = document.getElementById(`tip-video-${i}`);
+        if (!videoEl) return;
+        videoEl.addEventListener('error', () => {
+          const box = document.getElementById(`tip-video-box-${i}`);
+          if (box) box.outerHTML = `<div class="tip-video-missing">Couldn't load video: ${escapeHtml(src)} — check the path is relative to this HTML file.</div>`;
+        });
+      });
 
       if (formattedExample) {
         const mount = document.getElementById('tip-example-mount');
