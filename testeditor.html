@@ -157,7 +157,11 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   background: #161616; border-left: 1px solid #2a2a2a;
   display: flex; flex-direction: column; overflow: hidden;
 }
-#outline-panel.collapsed { width: 0 !important; border-left: none; }
+/* Collapsed = a slim strip that stays in normal layout flow (not an overlay),
+   so it never ends up sitting on top of the editor's own scrollbar. */
+#outline-panel.collapsed { width: 22px !important; min-width: 22px; }
+#outline-panel.collapsed #outline-header { justify-content: center; padding: 7px 0; border-bottom: none; }
+#outline-panel.collapsed #outline-title, #outline-panel.collapsed #outline-list { display: none; }
 #outline-header {
   padding: 7px 10px; font-family: Consolas, monospace; font-size: 10px;
   color: #666; text-transform: uppercase; letter-spacing: 0.08em;
@@ -180,14 +184,6 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .outline-comment-btn { color: #5c8a5c; font-style: italic; }
 .outline-comment-btn:hover { background: #222; color: #7fae7f; }
 .outline-empty { color: #444; font-size: 11px; padding: 10px; font-style: italic; line-height: 1.6; }
-#outline-toggle-collapsed {
-  position: absolute; top: 6px; right: 0; z-index: 5;
-  background: #161616; border: 1px solid #2a2a2a; border-right: none;
-  color: #666; cursor: pointer; font-size: 11px; padding: 4px 6px;
-  border-radius: 4px 0 0 4px; display: none;
-}
-#outline-toggle-collapsed.show { display: block; }
-#outline-toggle-collapsed:hover { color: #abb2bf; }
 
 /* ── Error panel ── */
 #error-panel {
@@ -467,11 +463,10 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   </div>
   <div id="editor-row">
     <div id="editor-wrap"></div>
-    <button id="outline-toggle-collapsed" title="Show outline">&#8249;</button>
     <div id="outline-resize" title="Drag to resize"></div>
     <div id="outline-panel">
       <div id="outline-header">
-        <span>Outline</span>
+        <span id="outline-title">Outline</span>
         <button id="outline-collapse" title="Collapse outline">&#8250;</button>
       </div>
       <div id="outline-list"></div>
@@ -867,7 +862,7 @@ require(['vs/editor/editor.main'], function () {
       category: `AI`,
       credit: `fen0612`,
       body: `A system that allows you to create compounds with a set of trigger boxes. The more specific guide is within the example, opening it in editor will allow you to see the specifics easier alongside the video.`,
-      exampleFile: `media/examples/enemyCompoundExample.txt`,
+      exampleFile: `media/examples/enemyCompoundExample.txtt`,
       video: `media/videos/enemycompound.mp4`,
     },
     {
@@ -1579,7 +1574,7 @@ require(['vs/editor/editor.main'], function () {
 
   function formatCommandText(raw) {
     if (!raw) return raw;
-    let text = raw.replace(/\/\//g, '\n//');
+    let text = raw.replace(/(?<!:)\/\//g, '\n//'); // skip URL schemes like https://
     text = text.replace(CMD_BREAK_RE, '\n$1');
     const lines = text.split('\n').map(line => line.trim().replace(/[ \t]{2,}/g, ' '));
     while (lines.length && lines[0] === '') lines.shift();
@@ -1956,9 +1951,9 @@ require(['vs/editor/editor.main'], function () {
           if (e.propertyName === 'height' && exampleEditor) exampleEditor.layout();
         });
 
-        function mountExampleEditor(rawText) {
+        function mountExampleEditor(rawText, alreadyFormatted) {
           disposeExampleEditor();
-          const formatted = formatCommandText(rawText);
+          const formatted = alreadyFormatted ? rawText : formatCommandText(rawText);
 
           const lineHeight = 19;
           const linePad = 10;
@@ -1978,6 +1973,7 @@ require(['vs/editor/editor.main'], function () {
             renderLineHighlight: 'none', overviewRulerLanes: 0,
             folding: false, glyphMargin: false,
             scrollbar: { alwaysConsumeMouseWheel: false },
+            automaticLayout: true,
           });
 
           if (naturalHeight <= collapsedHeight + 1) {
@@ -2015,7 +2011,7 @@ require(['vs/editor/editor.main'], function () {
               statusEl.classList.remove('tip-example-error');
               statusEl.classList.add('tip-example-local');
             }
-            mountExampleEditor(e.target.result);
+            mountExampleEditor(e.target.result, true);
           };
           reader.readAsText(file);
         }
@@ -2037,7 +2033,7 @@ require(['vs/editor/editor.main'], function () {
             .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
             .then(text => {
               if (statusEl) { statusEl.textContent = ''; statusEl.classList.remove('tip-example-error', 'tip-example-local'); }
-              mountExampleEditor(text);
+              mountExampleEditor(text, true);
             })
             .catch(() => {
               if (statusEl) {
@@ -2147,7 +2143,6 @@ require(['vs/editor/editor.main'], function () {
     const handle = document.getElementById('outline-resize');
     const panel = document.getElementById('outline-panel');
     const collapseBtn = document.getElementById('outline-collapse');
-    const reopenBtn = document.getElementById('outline-toggle-collapsed');
     let dragging = false, startX = 0, startWidth = 0;
 
     handle.addEventListener('mousedown', (e) => {
@@ -2173,11 +2168,11 @@ require(['vs/editor/editor.main'], function () {
     function setCollapsed(collapsed) {
       panel.classList.toggle('collapsed', collapsed);
       handle.style.display = collapsed ? 'none' : '';
-      reopenBtn.classList.toggle('show', collapsed);
+      collapseBtn.innerHTML = collapsed ? '&#8249;' : '&#8250;';
+      collapseBtn.title = collapsed ? 'Show outline' : 'Collapse outline';
       try { localStorage.setItem('cmdEditor_outlineCollapsed', collapsed ? '1' : '0'); } catch (e) {}
     }
-    collapseBtn.addEventListener('click', () => setCollapsed(true));
-    reopenBtn.addEventListener('click', () => setCollapsed(false));
+    collapseBtn.addEventListener('click', () => setCollapsed(!panel.classList.contains('collapsed')));
 
     try {
       const savedWidth = localStorage.getItem('cmdEditor_outlineWidth');
