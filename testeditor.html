@@ -7,12 +7,16 @@
 <script>
 const CHANGELOG = [
   {
-    version: "Tips and Tricks menu",
+    version: "Editor QoL and Tips Menu",
     date: "10/07/2026",
     changes: [
       { type: "new", text: "Added tips menu." },
       { type: "new", text: "Video and image support for tips." },
       { type: "new", text: "Example commands can be expanded and opened in editor." },
+      { type: "new", text: "Start a line with '/// Title' to open a collapsible code region, close it with a line containing just '///'." },
+      { type: "new", text: "Added a resizable outline panel on the right showing all regions and comments as a table of contents — click an entry to jump straight to it." },
+      { type: "new", text: "The Tips window can now be dragged around and resized instead of being a fixed centered popup." },
+      { type: "new", text: "Added saveable snippets: select some lines, right-click, and choose 'Save Snippet'. Snippets live in a new Snippets window with paste/import/export." },
       { type: "change", text: "Various edits to commands." },
       { type: "fix", text: "Fixed '%' being an invalid bUID value." },
     ]
@@ -138,8 +142,52 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 #btn-new-tab:hover { color: #abb2bf; background: #1e1e1e; }
 
 /* ── Editor area ── */
-#editor-wrap { flex: 1; min-height: 0; position: relative; }
+#editor-row { flex: 1; min-height: 0; display: flex; position: relative; }
+#editor-wrap { flex: 1; min-width: 0; position: relative; }
 .editor-instance { position: absolute; inset: 0; }
+
+/* ── Outline panel ── */
+#outline-resize {
+  width: 4px; flex-shrink: 0; cursor: col-resize; background: #111;
+  transition: background 0.1s;
+}
+#outline-resize:hover, #outline-resize.dragging { background: #61afef; }
+#outline-panel {
+  width: 220px; flex-shrink: 0; min-width: 0;
+  background: #161616; border-left: 1px solid #2a2a2a;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#outline-panel.collapsed { width: 0 !important; border-left: none; }
+#outline-header {
+  padding: 7px 10px; font-family: Consolas, monospace; font-size: 10px;
+  color: #666; text-transform: uppercase; letter-spacing: 0.08em;
+  border-bottom: 1px solid #2a2a2a; display: flex; align-items: center;
+  justify-content: space-between; flex-shrink: 0; white-space: nowrap;
+}
+#outline-collapse {
+  background: none; border: none; color: #666; cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 0 2px; flex-shrink: 0;
+}
+#outline-collapse:hover { color: #abb2bf; }
+#outline-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.outline-region-btn, .outline-comment-btn {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  font-family: Consolas, monospace; font-size: 11px; padding: 3px 10px 3px 8px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.outline-region-btn { color: #98c379; }
+.outline-region-btn:hover { background: #222; color: #b5e08c; }
+.outline-comment-btn { color: #5c8a5c; font-style: italic; }
+.outline-comment-btn:hover { background: #222; color: #7fae7f; }
+.outline-empty { color: #444; font-size: 11px; padding: 10px; font-style: italic; line-height: 1.6; }
+#outline-toggle-collapsed {
+  position: absolute; top: 6px; right: 0; z-index: 5;
+  background: #161616; border: 1px solid #2a2a2a; border-right: none;
+  color: #666; cursor: pointer; font-size: 11px; padding: 4px 6px;
+  border-radius: 4px 0 0 4px; display: none;
+}
+#outline-toggle-collapsed.show { display: block; }
+#outline-toggle-collapsed:hover { color: #abb2bf; }
 
 /* ── Error panel ── */
 #error-panel {
@@ -352,6 +400,56 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 }
 .tip-video-path.tip-video-error { color: #e06c75; }
 .tip-video-path.tip-video-local { color: #61afef; }
+
+/* Tips as a draggable, resizable floating window (not a blocking modal) */
+#tips-overlay { background: transparent; }
+#tips-overlay.open { pointer-events: none; }
+#tips-overlay .modal-box {
+  pointer-events: auto; position: fixed; top: 10vh; left: 50%;
+  transform: translateX(-50%); width: 680px; height: 68vh;
+  max-width: 92vw; max-height: 88vh; min-width: 340px; min-height: 240px;
+  resize: both; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.75);
+}
+#tips-overlay .modal-header { cursor: move; user-select: none; }
+
+/* Snippets */
+#snippets-overlay .modal-box { width: 440px; max-height: 70vh; }
+#snippets-toolbar {
+  display: flex; gap: 8px; padding: 8px 14px;
+  border-bottom: 1px solid #2a2a2a; flex-shrink: 0;
+}
+#snippets-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+#snippets-empty { padding: 18px 14px; color: #444; font-size: 12px; font-style: italic; line-height: 1.6; }
+.snippet-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-bottom: 1px solid #1e1e1e;
+}
+.snippet-row:hover { background: #1e1e1e; }
+.snippet-name {
+  flex: 1; min-width: 0; color: #abb2bf; font-family: Consolas, monospace;
+  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.snippet-btn {
+  background: none; border: 1px solid #333; color: #777;
+  font-family: Consolas, monospace; font-size: 10px; padding: 3px 8px;
+  cursor: pointer; border-radius: 3px; flex-shrink: 0;
+}
+.snippet-btn:hover { background: #252525; color: #abb2bf; border-color: #555; }
+.snippet-btn.primary { border-color: #2a4a5a; color: #61afef; }
+.snippet-btn.primary:hover { background: #1a3a4a; border-color: #61afef; }
+.snippet-btn.danger { border-color: #5a2a2a; color: #e06c75; }
+.snippet-btn.danger:hover { background: #2e1a1a; border-color: #e06c75; }
+
+/* Save-snippet naming dialog */
+#save-snippet-overlay .modal-box { width: 340px; }
+#save-snippet-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+#save-snippet-body p { color: #888; font-size: 12px; }
+#save-snippet-name {
+  background: #252525; border: 1px solid #444; color: #abb2bf;
+  font-family: Consolas, monospace; font-size: 12px; padding: 7px 9px;
+  border-radius: 4px; outline: none;
+}
+#save-snippet-name:focus { border-color: #61afef; }
 </style>
 </head>
 
@@ -361,7 +459,18 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     <div id="tabs-list"></div>
     <button id="btn-new-tab" title="New tab">+</button>
   </div>
-  <div id="editor-wrap"></div>
+  <div id="editor-row">
+    <div id="editor-wrap"></div>
+    <button id="outline-toggle-collapsed" title="Show outline">&#8249;</button>
+    <div id="outline-resize" title="Drag to resize"></div>
+    <div id="outline-panel">
+      <div id="outline-header">
+        <span>Outline</span>
+        <button id="outline-collapse" title="Collapse outline">&#8250;</button>
+      </div>
+      <div id="outline-list"></div>
+    </div>
+  </div>
   <div id="error-panel">
     <div id="error-header">
       <span>errors</span>
@@ -371,6 +480,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
         <button class="hdr-btn" id="btn-export">Export</button>
         <button class="hdr-btn" id="btn-docs">Commands</button>
         <button class="hdr-btn" id="btn-tips">Tips</button>
+        <button class="hdr-btn" id="btn-snippets">Snippets</button>
         <button class="hdr-btn" id="btn-changelog">Changelog</button>
         <span style="color: #666;">made with claude</span>
       </span>
@@ -463,6 +573,37 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     <div id="tips-layout">
       <div id="tips-sidebar"></div>
       <div id="tips-content"><span style="color:#444;font-size:12px;">Select a tip.</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="snippets-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Snippets</span>
+      <button class="modal-close" id="snippets-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="snippets-toolbar">
+      <button class="hdr-btn" id="snippets-import">Import</button>
+      <button class="hdr-btn" id="snippets-export-all">Export all</button>
+    </div>
+    <div id="snippets-list"></div>
+  </div>
+</div>
+
+<div id="save-snippet-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Save snippet</span>
+      <button class="modal-close" id="save-snippet-cancel-x">&#x2715;</button>
+    </div>
+    <div id="save-snippet-body">
+      <p>Name this snippet:</p>
+      <input type="text" id="save-snippet-name" placeholder="e.g. weather cycle setup">
+      <div class="close-warn-btn-row">
+        <button class="close-warn-btn export-close" id="save-snippet-confirm">Save</button>
+        <button class="close-warn-btn" id="save-snippet-cancel">Cancel</button>
+      </div>
     </div>
   </div>
 </div>
@@ -769,6 +910,15 @@ require(['vs/editor/editor.main'], function () {
     }
   });
 
+  monaco.languages.setLanguageConfiguration(LANG, {
+    folding: {
+      markers: {
+        start: /^\s*\/\/\/\s*\S/,   // /// Title  -> opens a region
+        end: /^\s*\/\/\/\s*$/,      // ///        -> closes the nearest open region
+      },
+    },
+  });
+
   // Single shared Monaco editor instance
   const editor = monaco.editor.create(editorWrap, {
     value: '', language: LANG, theme: 'cmdDark', fontSize: 14,
@@ -780,6 +930,20 @@ require(['vs/editor/editor.main'], function () {
     autoClosingBrackets: 'never', autoClosingQuotes: 'never',
     inlayHints: { enabled: 'on' },
     automaticLayout: true,
+  });
+
+  // Right-click a selection -> "Save Snippet". Only appears when text is selected.
+  editor.addAction({
+    id: 'save-snippet',
+    label: 'Save Snippet',
+    contextMenuGroupId: 'zzz-snippet',
+    contextMenuOrder: 1,
+    precondition: 'editorHasSelection',
+    run: (ed) => {
+      const sel = ed.getSelection();
+      const text = ed.getModel().getValueInRange(sel);
+      if (text) openSaveSnippetDialog(text);
+    },
   });
 
   // ── Tab drag-to-reorder ──
@@ -884,7 +1048,7 @@ require(['vs/editor/editor.main'], function () {
     model.onDidChangeContent(() => {
       clearTimeout(tabs[id].debounce);
       tabs[id].debounce = setTimeout(() => {
-        if (activeTabId === id) validate(model, editor);
+        if (activeTabId === id) { validate(model, editor); updateOutline(); }
         saveSession();
       }, 250);
     });
@@ -918,6 +1082,7 @@ require(['vs/editor/editor.main'], function () {
 
     // Re-validate
     validate(tab.model, editor);
+    updateOutline();
     saveSession();
   }
 
@@ -1074,7 +1239,7 @@ require(['vs/editor/editor.main'], function () {
 
   function paramDoc(p) {
     if (p.type === 'enum')    return { value: `Valid values:\n${p.values.map(v => '- ' + v).join('\n')}` };
-    if (p.type === 'uid')     return { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` or `%variableName`' };
+    if (p.type === 'uid')     return { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, `%variableName`, or just `%` on its own' };
     if (p.type === 'command') return { value: `A full command to execute.\nValid commands: ${Object.keys(CMDS).join(', ')}` };
     return { value: `Type: ${p.type}` };
   }
@@ -1609,7 +1774,7 @@ require(['vs/editor/editor.main'], function () {
             : p.values.join(', ');
           extra = `<div class="docs-param-enum">${preview}</div>`;
         }
-        if (p.type === 'uid') extra = `<div class="docs-param-enum">UUID or %variable</div>`;
+        if (p.type === 'uid') extra = `<div class="docs-param-enum">UUID, %variable, or just %</div>`;
         const defStr = p.default !== undefined ? ` <span style="color:#4a4a4a">(default: ${p.default})</span>` : '';
         return `<tr><td>${p.name}${defStr}</td><td style="color:${typeColor(p.type)}">${p.type}</td><td>${extra}</td></tr>`;
       }).join('');
@@ -1831,6 +1996,293 @@ require(['vs/editor/editor.main'], function () {
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
   })();
 
+  // ── Outline panel (/// regions + // comments) ──
+  // Building a region: start a line with `/// Some Title` (must have text after the
+  // slashes). Close it with a line containing only `///` (nothing after). Regions can
+  // nest; an unclosed region just stays open through the rest of the file. Ordinary
+  // `//` comments show up too, filed under whichever region they're inside (or at the
+  // top level if there's no enclosing region).
+  function computeOutline(model) {
+    const lines = model.getLinesContent();
+    const root = { children: [] };
+    const stack = [root];
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      const regionMatch = trimmed.match(/^\/\/\/\s*(.*)$/);
+      if (regionMatch) {
+        const title = regionMatch[1].trim();
+        if (title) {
+          const node = { type: 'region', title, line: i + 1, children: [] };
+          stack[stack.length - 1].children.push(node);
+          stack.push(node);
+        } else if (stack.length > 1) {
+          stack.pop();
+        }
+        continue;
+      }
+      if (trimmed.startsWith('//')) {
+        const text = trimmed.slice(2).trim();
+        if (text) stack[stack.length - 1].children.push({ type: 'comment', text, line: i + 1 });
+      }
+    }
+    return root.children;
+  }
+
+  function renderOutlineNodes(nodes, depth) {
+    return nodes.map(node => {
+      const pad = 8 + depth * 12;
+      if (node.type === 'region') {
+        const btn = `<button class="outline-region-btn" data-line="${node.line}" style="padding-left:${pad}px" title="${escapeHtml(node.title)}">&#9656; ${escapeHtml(node.title)}</button>`;
+        return btn + renderOutlineNodes(node.children, depth + 1);
+      }
+      return `<button class="outline-comment-btn" data-line="${node.line}" style="padding-left:${pad}px" title="${escapeHtml(node.text)}">${escapeHtml(node.text)}</button>`;
+    }).join('');
+  }
+
+  function updateOutline() {
+    const model = editor.getModel();
+    const list = document.getElementById('outline-list');
+    if (!model || !list) return;
+    const nodes = computeOutline(model);
+    if (!nodes.length) {
+      list.innerHTML = '<div class="outline-empty">No regions or comments yet.<br><br>Start a line with <code>/// Title</code> to open a collapsible region, and close it with a line containing just <code>///</code>.</div>';
+      return;
+    }
+    list.innerHTML = renderOutlineNodes(nodes, 0);
+    list.querySelectorAll('button[data-line]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ln = parseInt(btn.dataset.line, 10);
+        editor.setPosition({ lineNumber: ln, column: 1 });
+        editor.trigger('outline', 'editor.unfold', {});
+        editor.revealLineInCenter(ln);
+        editor.focus();
+      });
+    });
+  }
+
+  (function initOutlinePanel() {
+    const handle = document.getElementById('outline-resize');
+    const panel = document.getElementById('outline-panel');
+    const collapseBtn = document.getElementById('outline-collapse');
+    const reopenBtn = document.getElementById('outline-toggle-collapsed');
+    let dragging = false, startX = 0, startWidth = 0;
+
+    handle.addEventListener('mousedown', (e) => {
+      dragging = true; startX = e.clientX; startWidth = panel.getBoundingClientRect().width;
+      handle.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const delta = startX - e.clientX; // handle sits left of the panel, so dragging left grows it
+      const newWidth = Math.max(140, Math.min(480, startWidth + delta));
+      panel.style.width = newWidth + 'px';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.userSelect = '';
+      try { localStorage.setItem('cmdEditor_outlineWidth', panel.style.width); } catch (e) {}
+    });
+
+    function setCollapsed(collapsed) {
+      panel.classList.toggle('collapsed', collapsed);
+      handle.style.display = collapsed ? 'none' : '';
+      reopenBtn.classList.toggle('show', collapsed);
+      try { localStorage.setItem('cmdEditor_outlineCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+    }
+    collapseBtn.addEventListener('click', () => setCollapsed(true));
+    reopenBtn.addEventListener('click', () => setCollapsed(false));
+
+    try {
+      const savedWidth = localStorage.getItem('cmdEditor_outlineWidth');
+      if (savedWidth) panel.style.width = savedWidth;
+      setCollapsed(localStorage.getItem('cmdEditor_outlineCollapsed') === '1');
+    } catch (e) {}
+  })();
+
+  // ── Tips window: draggable + resizable floating panel instead of a blocking modal ──
+  (function initTipsWindow() {
+    const overlay = document.getElementById('tips-overlay');
+    const box = overlay.querySelector('.modal-box');
+    const header = overlay.querySelector('.modal-header');
+    let dragging = false, offsetX = 0, offsetY = 0;
+
+    function saveState() {
+      if (!overlay.classList.contains('open')) return;
+      try {
+        localStorage.setItem('cmdEditor_tipsWindow', JSON.stringify({
+          left: box.style.left, top: box.style.top,
+          width: box.offsetWidth + 'px', height: box.offsetHeight + 'px',
+        }));
+      } catch (e) {}
+    }
+
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.modal-close')) return;
+      dragging = true;
+      const rect = box.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      document.body.style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const x = Math.max(0, Math.min(window.innerWidth - 80, e.clientX - offsetX));
+      const y = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offsetY));
+      box.style.left = x + 'px';
+      box.style.top = y + 'px';
+      box.style.transform = 'none';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.userSelect = '';
+      saveState();
+    });
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => saveState()).observe(box);
+    }
+
+    try {
+      const raw = localStorage.getItem('cmdEditor_tipsWindow');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.left) { box.style.left = s.left; box.style.transform = 'none'; }
+        if (s.top) box.style.top = s.top;
+        if (s.width) box.style.width = s.width;
+        if (s.height) box.style.height = s.height;
+      }
+    } catch (e) {}
+  })();
+
+  // ── Snippets ──
+  const SNIPPETS_KEY = 'cmdEditor_snippets';
+
+  function loadSnippets() {
+    try { return JSON.parse(localStorage.getItem(SNIPPETS_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function saveSnippetsList(list) {
+    try { localStorage.setItem(SNIPPETS_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function makeSnippetId() {
+    return 'snip_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
+  let pendingSnippetText = null;
+
+  function openSaveSnippetDialog(text) {
+    pendingSnippetText = text;
+    const input = document.getElementById('save-snippet-name');
+    input.value = '';
+    document.getElementById('save-snippet-overlay').classList.add('open');
+    setTimeout(() => input.focus(), 0);
+  }
+  function closeSaveSnippetDialog() {
+    pendingSnippetText = null;
+    document.getElementById('save-snippet-overlay').classList.remove('open');
+  }
+
+  document.getElementById('save-snippet-confirm').addEventListener('click', () => {
+    const name = document.getElementById('save-snippet-name').value.trim();
+    if (!name || pendingSnippetText === null) return;
+    const list = loadSnippets();
+    list.push({ id: makeSnippetId(), name, content: pendingSnippetText, createdAt: Date.now() });
+    saveSnippetsList(list);
+    closeSaveSnippetDialog();
+    renderSnippetsList();
+  });
+  document.getElementById('save-snippet-cancel').addEventListener('click', closeSaveSnippetDialog);
+  document.getElementById('save-snippet-cancel-x').addEventListener('click', closeSaveSnippetDialog);
+  document.getElementById('save-snippet-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('save-snippet-confirm').click(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeSaveSnippetDialog(); }
+  });
+  document.getElementById('save-snippet-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('save-snippet-overlay')) closeSaveSnippetDialog();
+  });
+
+  function downloadSnippet(snip) {
+    const blob = new Blob([snip.content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = snip.name + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function renderSnippetsList() {
+    const list = loadSnippets();
+    const container = document.getElementById('snippets-list');
+    if (!list.length) {
+      container.innerHTML = '<div id="snippets-empty">No saved snippets yet. Select some lines in the editor, right-click, and choose "Save Snippet".</div>';
+      return;
+    }
+    container.innerHTML = list.map(s => `
+      <div class="snippet-row" data-id="${s.id}">
+        <span class="snippet-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
+        <button class="snippet-btn primary" data-action="paste">Paste in current window</button>
+        <button class="snippet-btn" data-action="export">Export</button>
+        <button class="snippet-btn danger" data-action="delete">Delete</button>
+      </div>`).join('');
+
+    container.querySelectorAll('.snippet-row').forEach(row => {
+      const id = row.dataset.id;
+      row.querySelector('[data-action="paste"]').addEventListener('click', () => {
+        const snip = loadSnippets().find(s => s.id === id);
+        if (!snip) return;
+        const sel = editor.getSelection();
+        editor.executeEdits('paste-snippet', [{ range: sel, text: snip.content }]);
+        editor.focus();
+      });
+      row.querySelector('[data-action="export"]').addEventListener('click', () => {
+        const snip = loadSnippets().find(s => s.id === id);
+        if (snip) downloadSnippet(snip);
+      });
+      row.querySelector('[data-action="delete"]').addEventListener('click', () => {
+        saveSnippetsList(loadSnippets().filter(s => s.id !== id));
+        renderSnippetsList();
+      });
+    });
+  }
+
+  document.getElementById('btn-snippets').addEventListener('click', () => {
+    renderSnippetsList();
+    document.getElementById('snippets-overlay').classList.add('open');
+  });
+  document.getElementById('snippets-close').addEventListener('click', () => document.getElementById('snippets-overlay').classList.remove('open'));
+  document.getElementById('snippets-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('snippets-overlay')) document.getElementById('snippets-overlay').classList.remove('open');
+  });
+
+  document.getElementById('snippets-export-all').addEventListener('click', () => {
+    loadSnippets().forEach(downloadSnippet);
+  });
+
+  document.getElementById('snippets-import').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.txt'; input.multiple = true;
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files);
+      if (!files.length) return;
+      const list = loadSnippets();
+      let loaded = 0;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          list.push({ id: makeSnippetId(), name: file.name.replace(/\.txt$/i, ''), content: e.target.result, createdAt: Date.now() });
+          loaded++;
+          if (loaded === files.length) { saveSnippetsList(list); renderSnippetsList(); }
+        };
+        reader.readAsText(file);
+      });
+    });
+    input.click();
+  });
+
   // ── Session persistence via localStorage ──
   const STORAGE_KEY = 'cmdEditor_session';
 
@@ -1880,7 +2332,7 @@ require(['vs/editor/editor.main'], function () {
     model.onDidChangeContent(() => {
       clearTimeout(tabs[id].debounce);
       tabs[id].debounce = setTimeout(() => {
-        if (activeTabId === id) validate(model, editor);
+        if (activeTabId === id) { validate(model, editor); updateOutline(); }
         saveSession();
       }, 250);
     });
