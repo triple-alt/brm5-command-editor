@@ -339,11 +339,16 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .tip-video-box video {
   display: block; width: 100%; max-height: 360px; background: #000;
 }
-.tip-video-missing {
-  border: 1px dashed #3a2a2a; border-radius: 4px; padding: 8px 12px;
-  font-family: Consolas, monospace; font-size: 11px; color: #e06c75;
-  margin-bottom: 16px; background: #1e1616;
+.tip-video-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; background: #1a1a1a; border-top: 1px solid #2a2a2a;
 }
+.tip-video-path {
+  color: #555; font-family: Consolas, monospace; font-size: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+.tip-video-path.tip-video-error { color: #e06c75; }
+.tip-video-path.tip-video-local { color: #61afef; }
 </style>
 </head>
 
@@ -670,6 +675,15 @@ require(['vs/editor/editor.main'], function () {
   //                                                                       // as a native <video controls>
   //                                                                       // player. Can also be an array of
   //                                                                       // paths to show several videos.
+  //                                                                       // This path is just a first guess —
+  //                                                                       // every video also gets a "Choose
+  //                                                                       // file…" button, so if the file
+  //                                                                       // isn't there (wrong path, lives
+  //                                                                       // on a different machine/drive,
+  //                                                                       // etc.) the viewer can just point
+  //                                                                       // at the real file directly. That
+  //                                                                       // pick only lasts the session (has
+  //                                                                       // to be re-chosen after a reload).
   // },
 
 
@@ -1642,13 +1656,20 @@ require(['vs/editor/editor.main'], function () {
     const content  = document.getElementById('tips-content');
     let activeBtn  = null;
     let exampleEditor = null;
+    let activeVideoUrls = []; // object URLs from locally-chosen video files, revoked on next render
 
     function disposeExampleEditor() {
       if (exampleEditor) { exampleEditor.dispose(); exampleEditor = null; }
     }
 
+    function revokeVideoUrls() {
+      activeVideoUrls.forEach(url => URL.revokeObjectURL(url));
+      activeVideoUrls = [];
+    }
+
     function renderTip(tip) {
       disposeExampleEditor();
+      revokeVideoUrls();
 
       let html = `<div class="docs-cmd-name">${tip.title}</div>`;
 
@@ -1666,6 +1687,10 @@ require(['vs/editor/editor.main'], function () {
       html += videos.map((src, i) => `
         <div class="tip-video-box" id="tip-video-box-${i}">
           <video controls preload="metadata" id="tip-video-${i}" src="${escapeHtml(src)}"></video>
+          <div class="tip-video-toolbar">
+            <span class="tip-video-path" id="tip-video-path-${i}" title="${escapeHtml(src)}">${escapeHtml(src)}</span>
+            <button class="tip-example-btn" id="tip-video-choose-${i}">&#128193; Choose file…</button>
+          </div>
         </div>`).join('');
 
       const formattedExample = tip.example ? formatCommandText(tip.example) : null;
@@ -1685,11 +1710,47 @@ require(['vs/editor/editor.main'], function () {
 
       videos.forEach((src, i) => {
         const videoEl = document.getElementById(`tip-video-${i}`);
+        const chooseBtn = document.getElementById(`tip-video-choose-${i}`);
+        const pathLabel = document.getElementById(`tip-video-path-${i}`);
         if (!videoEl) return;
+        let currentLocalUrl = null;
+
         videoEl.addEventListener('error', () => {
-          const box = document.getElementById(`tip-video-box-${i}`);
-          if (box) box.outerHTML = `<div class="tip-video-missing">Couldn't load video: ${escapeHtml(src)} — check the path is relative to this HTML file.</div>`;
+          // A locally-chosen file (blob: URL) failing is a different problem (bad file);
+          // don't overwrite that status with the "couldn't find it at this path" message.
+          if (videoEl.src.startsWith('blob:')) return;
+          if (pathLabel) {
+            pathLabel.textContent = `Couldn't load "${src}" — choose the file manually instead:`;
+            pathLabel.classList.add('tip-video-error');
+          }
         });
+
+        if (chooseBtn) {
+          chooseBtn.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'video/*';
+            input.addEventListener('change', () => {
+              const file = input.files[0];
+              if (!file) return;
+              if (currentLocalUrl) {
+                URL.revokeObjectURL(currentLocalUrl);
+                activeVideoUrls = activeVideoUrls.filter(u => u !== currentLocalUrl);
+              }
+              currentLocalUrl = URL.createObjectURL(file);
+              activeVideoUrls.push(currentLocalUrl);
+              videoEl.src = currentLocalUrl;
+              videoEl.load();
+              videoEl.play().catch(() => {}); // autoplay can be blocked; controls remain usable either way
+              if (pathLabel) {
+                pathLabel.textContent = `Playing local file: ${file.name}`;
+                pathLabel.classList.remove('tip-video-error');
+                pathLabel.classList.add('tip-video-local');
+              }
+            });
+            input.click();
+          });
+        }
       });
 
       if (formattedExample) {
