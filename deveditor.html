@@ -1,0 +1,2595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor</title>
+<script>
+const CHANGELOG = [
+  {
+    version: "Colour Picker & Editor Polish",
+    date: "12/07/2026",
+    changes: [
+      { type: "new", text: "RGB values in 'color' and 'trigger color' lines now show an inline colour swatch — click it to open a colour picker that writes the numbers back for you." },
+      { type: "new", text: "Ctrl+/ toggles // comments on the current line or selection." },
+      { type: "new", text: "Status bar under the editor showing problems, cursor position, command count and the script's total wait time." },
+      { type: "new", text: "Drop .txt files anywhere onto the editor window to import them as new tabs." },
+      { type: "change", text: "Import/Export/Commands/Tips/Snippets/Changelog moved out of the error panel into the tab bar, where they're always reachable." },
+      { type: "change", text: "The problems panel is now collapsible (click its header or the status bar problem counts) and resizable by dragging its top edge. It expands automatically when new errors appear." },
+      { type: "change", text: "Tab close buttons only appear on hover or on the active tab, so the tab bar looks calmer." },
+      { type: "fix", text: "Escape now also closes the Snippets and Save Snippet dialogs." },
+    ]
+  },
+  {
+    version: "Editor QoL and Tips Menu",
+    date: "11/07/2026",
+    changes: [
+      { type: "new", text: "Added tips menu." },
+      { type: "new", text: "Video and image support for tips." },
+      { type: "new", text: "Example commands can be expanded and opened in editor." },
+      { type: "new", text: "Start a line with '/// Title' to open a collapsible code region, close it with a line containing just '///'." },
+      { type: "new", text: "Added a resizable outline panel on the right showing all regions and comments as a table of contents — click an entry to jump straight to it." },
+      { type: "new", text: "The Tips window can now be dragged around and resized instead of being a fixed centered popup." },
+      { type: "new", text: "Added saveable snippets: select some lines, right-click, and choose 'Save Snippet'. Snippets live in a new Snippets window with paste/import/export." },
+      { type: "change", text: "Various edits to commands." },
+      { type: "fix", text: "Fixed '%' being an invalid bUID value." },
+      { type: "fix", text: "Props no longer get autofilled due to potential future compatability problems." },
+    ]
+  },
+  {
+    version: "NavMesh & Command Tab improvements",
+    date: "05/07/2026",
+    changes: [
+      { type: "new", text: "Added navmesh related commands." },
+    ]
+  },
+  {
+    version: "Persistent Editor Tabs",
+    date: "15/04/2026",
+    changes: [
+      { type: "new", text: "Editor tabs are now persistent and you aren't prompted to save." },
+      { type: "change", text: "Editor tabs are moveable on the tab bar." },
+    ]
+  },
+  {
+    version: "Weather Command and QOL additions",
+    date: "12/04/2026",
+    changes: [
+      { type: "new", text: "Added weather command." },
+      { type: "new", text: "Editor supports multiple tabs, renaming and nice importing/exporting." },
+    ]
+  },
+  {
+    version: "Added spawn command",
+    date: "09/04/2026",
+    changes: [
+      { type: "new", text: "Added spawn command." },
+      { type: "change", text: "Added (hopefully) all props under 'propName' parameter of the spawn command." },
+      { type: "change", text: "Fixed 'ObjBig' being 'Obj'." },
+    ]
+  },
+  {
+    version: "Added hidden commands",
+    date: "07/04/2026",
+    changes: [
+      { type: "new", text: "Added collision, teleport and bot commands." },
+      { type: "new", text: "Added // comment support." },
+      { type: "new", text: "Added command reference." },
+    ]
+  },
+  {
+    version: "New Properties",
+    date: "06/04/2025",
+    changes: [
+      { type: "new",    text: "Added support for 'isButton' property." },
+      { type: "new",    text: "Added support for 'isLooping' property." },
+      { type: "new",    text: "Pasted coordinates with commas get commas automatically removed." },
+      { type: "new",    text: "Added the rest of the commands (hopefully all?)." },
+      { type: "change", text: "Added this changelog." },
+    ]
+  },
+];
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
+#app { display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
+
+/* ── Tab bar ── */
+#tab-bar {
+  display: flex; align-items: stretch;
+  background: #111; border-bottom: 1px solid #2a2a2a;
+  height: 33px; flex-shrink: 0;
+}
+#tabs-list {
+  display: flex; align-items: stretch;
+  overflow-x: auto; overflow-y: hidden; min-width: 0;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+#tabs-list::-webkit-scrollbar { height: 3px; }
+#tabs-list::-webkit-scrollbar-thumb { background: #333; }
+#tab-bar-actions {
+  margin-left: auto; display: flex; align-items: center;
+  padding: 0 8px; gap: 1px; flex-shrink: 0;
+  border-left: 1px solid #2a2a2a;
+}
+.bar-btn {
+  background: none; border: none; color: #666;
+  font-family: Consolas, monospace; font-size: 11px;
+  padding: 4px 9px; cursor: pointer; border-radius: 3px;
+  transition: color 0.1s, background 0.1s;
+}
+.bar-btn:hover { color: #abb2bf; background: #1e1e1e; }
+.bar-sep { width: 1px; height: 14px; background: #2a2a2a; margin: 0 5px; flex-shrink: 0; }
+.tab {
+  display: flex; align-items: center; gap: 0;
+  padding: 0; min-width: 90px; max-width: 180px;
+  background: #161616; border-right: 1px solid #2a2a2a;
+  cursor: pointer; position: relative; flex-shrink: 0;
+  font-family: Consolas, monospace; font-size: 12px;
+  color: #666; user-select: none;
+  transition: background 0.1s;
+}
+.tab:hover { background: #1e1e1e; color: #888; }
+.tab.active { background: #1a1a1a; color: #abb2bf; border-bottom: 1px solid #1a1a1a; margin-bottom: -1px; }
+.tab.active::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px; background: #61afef; z-index: 1;
+}
+.tab.drag-over-left::before {
+  content: ''; position: absolute; left: -1px; top: 0; bottom: 0;
+  width: 2px; background: #61afef; z-index: 10; pointer-events: none;
+}
+.tab.drag-over-right::after {
+  content: ''; position: absolute; right: -1px; top: 0; bottom: 0;
+  width: 2px; background: #61afef; z-index: 10; pointer-events: none;
+}
+.tab.dragging { opacity: 0.4; }
+.tab-name {
+  flex: 1; padding: 0 8px 0 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 33px;
+}
+.tab-name-input {
+  flex: 1; background: #252525; border: 1px solid #61afef;
+  color: #abb2bf; font-family: Consolas, monospace; font-size: 12px;
+  padding: 2px 4px; outline: none; margin: 4px 4px 4px 8px;
+  border-radius: 2px; min-width: 0;
+}
+.tab-close {
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  color: #444; font-size: 13px; border-radius: 3px; margin-right: 3px; flex-shrink: 0;
+  opacity: 0; transition: color 0.1s, background 0.1s, opacity 0.1s;
+}
+.tab:hover .tab-close, .tab.active .tab-close { opacity: 1; }
+.tab-close:hover { color: #abb2bf; background: #333; }
+.tab.active .tab-close { color: #666; }
+#btn-new-tab {
+  display: flex; align-items: center; justify-content: center;
+  width: 33px; height: 33px; flex-shrink: 0;
+  background: none; border: none; color: #555;
+  font-size: 18px; cursor: pointer; font-family: Consolas, monospace;
+  transition: color 0.15s, background 0.15s;
+}
+#btn-new-tab:hover { color: #abb2bf; background: #1e1e1e; }
+
+/* ── Editor area ── */
+#editor-row { flex: 1; min-height: 0; display: flex; position: relative; }
+#editor-wrap { flex: 1; min-width: 0; position: relative; }
+.editor-instance { position: absolute; inset: 0; }
+
+/* ── Outline panel ── */
+#outline-resize {
+  width: 4px; flex-shrink: 0; cursor: col-resize; background: #111;
+  transition: background 0.1s;
+}
+#outline-resize:hover, #outline-resize.dragging { background: #61afef; }
+#outline-panel {
+  width: 220px; flex-shrink: 0; min-width: 0;
+  background: #161616; border-left: 1px solid #2a2a2a;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+/* Collapsed = a slim strip that stays in normal layout flow (not an overlay),
+   so it never ends up sitting on top of the editor's own scrollbar. */
+#outline-panel.collapsed { width: 22px !important; min-width: 22px; }
+#outline-panel.collapsed #outline-header { justify-content: center; padding: 7px 0; border-bottom: none; }
+#outline-panel.collapsed #outline-title, #outline-panel.collapsed #outline-list { display: none; }
+#outline-header {
+  padding: 7px 10px; font-family: Consolas, monospace; font-size: 10px;
+  color: #666; text-transform: uppercase; letter-spacing: 0.08em;
+  border-bottom: 1px solid #2a2a2a; display: flex; align-items: center;
+  justify-content: space-between; flex-shrink: 0; white-space: nowrap;
+}
+#outline-collapse {
+  background: none; border: none; color: #666; cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 0 2px; flex-shrink: 0;
+}
+#outline-collapse:hover { color: #abb2bf; }
+#outline-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.outline-region-btn, .outline-comment-btn {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  font-family: Consolas, monospace; font-size: 11px; padding: 3px 10px 3px 8px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.outline-region-btn { color: #98c379; }
+.outline-region-btn:hover { background: #222; color: #b5e08c; }
+.outline-comment-btn { color: #5c8a5c; font-style: italic; }
+.outline-comment-btn:hover { background: #222; color: #7fae7f; }
+.outline-empty { color: #444; font-size: 11px; padding: 10px; font-style: italic; line-height: 1.6; }
+
+/* ── Status bar ── */
+#status-bar {
+  height: 22px; flex-shrink: 0; background: #111; border-top: 1px solid #2a2a2a;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px 0 6px; font-family: Consolas, monospace; font-size: 11px; color: #555;
+  user-select: none;
+}
+#status-left { display: flex; align-items: center; gap: 12px; }
+#status-problems {
+  display: flex; gap: 9px; cursor: pointer; padding: 2px 6px; border-radius: 3px;
+  transition: background 0.1s;
+}
+#status-problems:hover { background: #1e1e1e; }
+#sp-err, #sp-warn { color: #4a4a4a; }
+#sp-err.has { color: #e06c75; }
+#sp-warn.has { color: #e5c07b; }
+#status-stats { display: flex; gap: 14px; }
+
+/* ── Problems panel ── */
+#error-resize {
+  height: 4px; flex-shrink: 0; cursor: row-resize; background: #111;
+  transition: background 0.1s;
+}
+#error-resize:hover, #error-resize.dragging { background: #61afef; }
+#error-panel {
+  height: 160px; background: #111;
+  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+}
+#error-panel.collapsed { height: 29px !important; }
+#error-panel.collapsed #error-list { display: none; }
+#error-panel.collapsed #error-chevron { transform: rotate(-90deg); }
+#error-header {
+  padding: 6px 12px; background: #1e1e1e; border-bottom: 1px solid #333;
+  font-family: Consolas, monospace; font-size: 12px; color: #888;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  cursor: pointer; user-select: none; transition: background 0.1s;
+}
+#error-header:hover { background: #232323; }
+#error-chevron {
+  color: #666; font-size: 11px; display: inline-block;
+  transition: transform 0.12s;
+}
+#error-count { color: #db3240; font-weight: 600; }
+.hdr-btn {
+  background: none; border: 1px solid #444; color: #888;
+  font-family: Consolas, monospace; font-size: 11px; padding: 1px 8px;
+  cursor: pointer; border-radius: 3px;
+}
+.hdr-btn:hover { background: #2a2a2a; color: #abb2bf; border-color: #555; }
+#error-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.err-row {
+  display: grid; grid-template-columns: 28px 60px 60px 1fr;
+  padding: 3px 12px; font-family: Consolas, monospace; font-size: 12px;
+  cursor: pointer; gap: 8px; align-items: center;
+}
+.err-row:hover { background: #1e1e1e; }
+.err-icon { text-align: center; font-size: 11px; }
+.err-icon.error { color: #e06c75; }
+.err-icon.warning { color: #e5c07b; }
+.err-icon.hint { color: #61afef; }
+.err-pos { color: #666; }
+.err-msg { color: #abb2bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#no-errors { padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; color: #4a4a4a; }
+
+/* ── Modals ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65); z-index: 9999;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 6px;
+  max-width: 92vw; max-height: 82vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6); font-family: Consolas, monospace;
+}
+.modal-header {
+  display: flex; align-items: center; padding: 10px 14px;
+  border-bottom: 1px solid #333; flex-shrink: 0; gap: 10px;
+}
+.modal-title { color: #abb2bf; font-size: 13px; flex: 1; }
+.modal-close { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
+.modal-close:hover { color: #abb2bf; }
+
+/* Import dialog */
+#import-overlay .modal-box { width: 360px; }
+#import-body { padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+#import-body p { color: #888; font-size: 12px; line-height: 1.6; }
+#import-filename { color: #61afef; }
+.import-btn-row { display: flex; gap: 8px; margin-top: 4px; }
+.import-choice-btn {
+  flex: 1; padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 12px; border: 1px solid #444;
+  background: #252525; color: #abb2bf; transition: background 0.1s, border-color 0.1s;
+}
+.import-choice-btn:hover { background: #2e2e2e; border-color: #61afef; color: #61afef; }
+.import-choice-btn.primary { background: #1a3a4a; border-color: #61afef; color: #61afef; }
+.import-choice-btn.primary:hover { background: #1e4a5a; }
+
+/* Close warning dialog */
+#close-warn-overlay .modal-box { width: 340px; }
+#close-warn-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+#close-warn-body p { color: #888; font-size: 12px; line-height: 1.6; }
+#close-warn-tabname { color: #61afef; }
+.close-warn-btn-row { display: flex; gap: 8px; margin-top: 2px; }
+.close-warn-btn {
+  flex: 1; padding: 7px 10px; border-radius: 4px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 11px; border: 1px solid #444;
+  background: #252525; color: #abb2bf; transition: background 0.1s, border-color 0.1s;
+}
+.close-warn-btn:hover { background: #2e2e2e; border-color: #555; }
+.close-warn-btn.export-close { background: #1a3a4a; border-color: #61afef; color: #61afef; }
+.close-warn-btn.export-close:hover { background: #1e4a5a; }
+.close-warn-btn.danger { border-color: #5a2a2a; color: #e06c75; }
+.close-warn-btn.danger:hover { background: #2e1a1a; border-color: #e06c75; }
+
+/* Multi-export dialog */
+#multiexport-overlay .modal-box { width: 380px; }
+#multiexport-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 60vh; }
+.multiexport-select-row { display: flex; gap: 8px; margin-bottom: 2px; }
+.multiexport-select-btn {
+  background: none; border: 1px solid #333; color: #666;
+  font-family: Consolas, monospace; font-size: 11px; padding: 2px 8px;
+  cursor: pointer; border-radius: 3px;
+}
+.multiexport-select-btn:hover { color: #abb2bf; border-color: #555; }
+.multiexport-tab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 4px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.multiexport-tab-row:hover { background: #252525; }
+.multiexport-tab-row input[type=checkbox] { accent-color: #61afef; width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+.multiexport-tab-label { color: #abb2bf; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.multiexport-footer { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid #2a2a2a; flex-shrink: 0; }
+.multiexport-footer-btn {
+  flex: 1; padding: 7px 12px; border-radius: 4px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 12px; border: 1px solid #444;
+  background: #252525; color: #abb2bf; transition: background 0.1s;
+}
+.multiexport-footer-btn:hover { background: #2e2e2e; }
+.multiexport-footer-btn.primary { background: #1a3a4a; border-color: #61afef; color: #61afef; }
+.multiexport-footer-btn.primary:hover { background: #1e4a5a; }
+
+#cl-overlay .modal-box { width: 480px; }
+#cl-body { overflow-y: auto; padding: 12px 14px; }
+.cl-version-block { margin-bottom: 18px; }
+.cl-version-block:last-child { margin-bottom: 0; }
+.cl-ver-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.cl-ver { color: #61afef; font-size: 13px; font-weight: 600; }
+.cl-date { color: #4a4a4a; font-size: 11px; }
+.cl-entry { display: flex; align-items: baseline; gap: 7px; padding: 2px 0 2px 4px; font-size: 12px; color: #abb2bf; }
+.cl-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.cl-tag.new    { background: #1a3a26; color: #4ec97a; border: 1px solid #2a5a3a; }
+.cl-tag.fix    { background: #3a2020; color: #e06c75; border: 1px solid #5a3030; }
+.cl-tag.change { background: #2a2a10; color: #e5c07b; border: 1px solid #4a4a20; }
+
+#docs-overlay .modal-box { width: 720px; }
+#docs-layout { display: flex; flex: 1; min-height: 0; }
+#docs-sidebar {
+  width: 160px; flex-shrink: 0; overflow-y: auto;
+  border-right: 1px solid #2a2a2a; padding: 8px 0;
+}
+.docs-cmd-btn {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; color: #777;
+  font-family: Consolas, monospace; font-size: 12px;
+  padding: 5px 14px; cursor: pointer;
+}
+.docs-cmd-btn:hover { background: #252525; color: #abb2bf; }
+.docs-cmd-btn.active { background: #2a3a4a; color: #61afef; }
+#docs-content { flex: 1; overflow-y: auto; padding: 16px 18px; min-width: 0; }
+.docs-cmd-name { color: #61afef; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.docs-cmd-doc  { color: #888; font-size: 12px; margin-bottom: 16px; line-height: 1.6; }
+.docs-section-title { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+.docs-params-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+.docs-params-table th { color: #555; font-weight: normal; text-align: left; padding: 3px 8px 5px 0; border-bottom: 1px solid #2a2a2a; }
+.docs-params-table td { padding: 5px 8px 5px 0; color: #abb2bf; vertical-align: top; border-bottom: 1px solid #1e1e1e; }
+.docs-params-table td:first-child { color: #c678dd; width: 100px; }
+.docs-params-table td:nth-child(2) { color: #e5c07b; width: 80px; }
+.docs-param-enum { color: #666; font-size: 11px; margin-top: 2px; line-height: 1.5; }
+.docs-subtype-block { margin-bottom: 14px; border-left: 2px solid #2a3a4a; padding-left: 12px; }
+.docs-subtype-name { color: #98c379; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.docs-subtype-doc { color: #777; font-size: 11px; margin-bottom: 8px; }
+.docs-example {
+  background: #161616; border: 1px solid #2a2a2a; border-radius: 4px;
+  padding: 8px 12px; font-size: 12px; color: #abb2bf;
+  margin-bottom: 20px; white-space: pre;
+}
+.docs-no-params { color: #444; font-size: 12px; margin-bottom: 16px; font-style: italic; }
+
+#tips-overlay .modal-box { width: 680px; }
+#tips-layout { display: flex; flex: 1; min-height: 0; }
+#tips-sidebar {
+  width: 180px; flex-shrink: 0; overflow-y: auto;
+  border-right: 1px solid #2a2a2a; padding: 8px 0;
+}
+#tips-content { flex: 1; overflow-y: auto; padding: 16px 18px; min-width: 0; }
+.tips-cat-header {
+  padding: 12px 14px 4px; font-size: 10px; color: #4a4a4a;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.tips-cat-header:first-child { padding-top: 6px; }
+.tip-para { color: #abb2bf; font-size: 12px; margin-bottom: 12px; line-height: 1.7; }
+.tip-para:last-child { margin-bottom: 0; }
+.tip-link { color: #61afef; text-decoration: none; border-bottom: 1px solid rgba(97,175,239,0.4); }
+.tip-link:hover { color: #8ec9ff; border-bottom-color: #8ec9ff; }
+.tip-meta { color: #666; font-size: 11px; margin-bottom: 10px; }
+.tip-example-box {
+  border: 1px solid #2a2a2a; border-radius: 4px; overflow: hidden;
+  background: #161616; margin-bottom: 16px;
+}
+.tip-example-mount { height: 28px; transition: height 0.15s ease; }
+.tip-example-toolbar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 4px 6px; background: #1a1a1a; border-top: 1px solid #2a2a2a;
+}
+.tip-example-status {
+  color: #555; font-family: Consolas, monospace; font-size: 10px;
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tip-example-status.tip-example-error { color: #e06c75; }
+.tip-example-btn {
+  background: none; border: 1px solid #333; color: #777;
+  font-family: Consolas, monospace; font-size: 10px; padding: 2px 8px;
+  cursor: pointer; border-radius: 3px; flex-shrink: 0;
+}
+.tip-example-btn:hover { background: #252525; color: #abb2bf; border-color: #555; }
+.tip-example-btn.primary { border-color: #2a4a5a; color: #61afef; }
+.tip-example-btn.primary:hover { background: #1a3a4a; border-color: #61afef; }
+.tip-video-box {
+  border: 1px solid #2a2a2a; border-radius: 4px; overflow: hidden;
+  background: #000; margin-bottom: 16px;
+}
+.tip-video-box video {
+  display: block; width: 100%; max-height: 360px; background: #000;
+}
+.tip-video-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; background: #1a1a1a; border-top: 1px solid #2a2a2a;
+}
+.tip-video-path {
+  color: #555; font-family: Consolas, monospace; font-size: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+.tip-video-path.tip-video-error { color: #e06c75; }
+
+/* Tips as a draggable, resizable floating window (not a blocking modal) */
+#tips-overlay { background: transparent; }
+#tips-overlay.open { pointer-events: none; }
+#tips-overlay .modal-box {
+  pointer-events: auto; position: fixed; top: 10vh; left: 50%;
+  transform: translateX(-50%); width: 680px; height: 68vh;
+  max-width: 92vw; max-height: 88vh; min-width: 340px; min-height: 240px;
+  resize: both; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.75);
+}
+#tips-overlay .modal-header { cursor: move; user-select: none; }
+
+/* Snippets */
+#snippets-overlay .modal-box { width: 440px; max-height: 70vh; }
+#snippets-toolbar {
+  display: flex; gap: 8px; padding: 8px 14px;
+  border-bottom: 1px solid #2a2a2a; flex-shrink: 0;
+}
+#snippets-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+#snippets-empty { padding: 18px 14px; color: #444; font-size: 12px; font-style: italic; line-height: 1.6; }
+.snippet-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-bottom: 1px solid #1e1e1e;
+}
+.snippet-row:hover { background: #1e1e1e; }
+.snippet-name {
+  flex: 1; min-width: 0; color: #abb2bf; font-family: Consolas, monospace;
+  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.snippet-btn {
+  background: none; border: 1px solid #333; color: #777;
+  font-family: Consolas, monospace; font-size: 10px; padding: 3px 8px;
+  cursor: pointer; border-radius: 3px; flex-shrink: 0;
+}
+.snippet-btn:hover { background: #252525; color: #abb2bf; border-color: #555; }
+.snippet-btn.primary { border-color: #2a4a5a; color: #61afef; }
+.snippet-btn.primary:hover { background: #1a3a4a; border-color: #61afef; }
+.snippet-btn.danger { border-color: #5a2a2a; color: #e06c75; }
+.snippet-btn.danger:hover { background: #2e1a1a; border-color: #e06c75; }
+
+/* Save-snippet naming dialog */
+#save-snippet-overlay .modal-box { width: 340px; }
+#save-snippet-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+#save-snippet-body p { color: #888; font-size: 12px; }
+#save-snippet-name {
+  background: #252525; border: 1px solid #444; color: #abb2bf;
+  font-family: Consolas, monospace; font-size: 12px; padding: 7px 9px;
+  border-radius: 4px; outline: none;
+}
+#save-snippet-name:focus { border-color: #61afef; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div id="tab-bar">
+    <div id="tabs-list"></div>
+    <button id="btn-new-tab" title="New tab">+</button>
+    <div id="tab-bar-actions">
+      <button class="bar-btn" id="btn-import">Import</button>
+      <button class="bar-btn" id="btn-export">Export</button>
+      <span class="bar-sep"></span>
+      <button class="bar-btn" id="btn-docs">Commands</button>
+      <button class="bar-btn" id="btn-tips">Tips</button>
+      <button class="bar-btn" id="btn-snippets">Snippets</button>
+      <span class="bar-sep"></span>
+      <button class="bar-btn" id="btn-changelog">Changelog</button>
+    </div>
+  </div>
+  <div id="editor-row">
+    <div id="editor-wrap"></div>
+    <div id="outline-resize" title="Drag to resize"></div>
+    <div id="outline-panel">
+      <div id="outline-header">
+        <span id="outline-title">Outline</span>
+        <button id="outline-collapse" title="Collapse outline">&#8250;</button>
+      </div>
+      <div id="outline-list"></div>
+    </div>
+  </div>
+  <div id="error-resize" title="Drag to resize"></div>
+  <div id="error-panel">
+    <div id="error-header">
+      <span id="error-chevron">&#9662;</span>
+      <span>problems</span>
+      <span id="error-count">0 errors</span>
+      <span style="margin-left: auto; color: #3a3a3a; font-size: 11px;">made with claude</span>
+    </div>
+    <div id="error-list"><div id="no-errors">no errors</div></div>
+  </div>
+  <div id="status-bar">
+    <span id="status-left">
+      <span id="status-problems" title="Toggle problems panel"><span id="sp-err">&#10007; 0</span><span id="sp-warn">&#9888; 0</span></span>
+      <span id="status-cursor">Ln 1, Col 1</span>
+    </span>
+    <span id="status-stats"></span>
+  </div>
+</div>
+
+<!-- Import choice modal -->
+<div id="import-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Import file</span>
+      <button class="modal-close" id="import-close">&#x2715;</button>
+    </div>
+    <div id="import-body">
+      <p>Import <span id="import-filename"></span> into…</p>
+      <div class="import-btn-row">
+        <button class="import-choice-btn primary" id="import-new-tab">New tab</button>
+        <button class="import-choice-btn" id="import-override">Override current tab</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Close warning modal -->
+<div id="close-warn-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Unsaved file</span>
+      <button class="modal-close" id="close-warn-cancel">&#x2715;</button>
+    </div>
+    <div id="close-warn-body">
+      <p>Export <span id="close-warn-tabname"></span> before closing?</p>
+      <div class="close-warn-btn-row">
+        <button class="close-warn-btn export-close" id="close-warn-export-close">Export &amp; close</button>
+        <button class="close-warn-btn danger" id="close-warn-just-close">Close without exporting</button>
+      </div>
+      <div class="close-warn-btn-row">
+        <button class="close-warn-btn" id="close-warn-cancel2">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Multi-export modal -->
+<div id="multiexport-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:380px; max-height:70vh;">
+    <div class="modal-header">
+      <span class="modal-title">Export tabs</span>
+      <button class="modal-close" id="multiexport-close">&#x2715;</button>
+    </div>
+    <div id="multiexport-body"></div>
+    <div class="multiexport-footer">
+      <button class="multiexport-footer-btn" id="multiexport-cancel">Cancel</button>
+      <button class="multiexport-footer-btn primary" id="multiexport-do">Download selected</button>
+    </div>
+  </div>
+</div>
+
+<div id="cl-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">changelog</span>
+      <button class="modal-close" id="cl-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="cl-body"></div>
+  </div>
+</div>
+
+<div id="docs-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Command Reference</span>
+      <button class="modal-close" id="docs-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="docs-layout">
+      <div id="docs-sidebar"></div>
+      <div id="docs-content"><span style="color:#444;font-size:12px;">Select a command.</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="tips-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Tips</span>
+      <button class="modal-close" id="tips-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="tips-layout">
+      <div id="tips-sidebar"></div>
+      <div id="tips-content"><span style="color:#444;font-size:12px;">Select a tip.</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="snippets-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Snippets</span>
+      <button class="modal-close" id="snippets-close" title="Close">&#x2715;</button>
+    </div>
+    <div id="snippets-toolbar">
+      <button class="hdr-btn" id="snippets-import">Import</button>
+      <button class="hdr-btn" id="snippets-export-all">Export all</button>
+    </div>
+    <div id="snippets-list"></div>
+  </div>
+</div>
+
+<div id="save-snippet-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Save snippet</span>
+      <button class="modal-close" id="save-snippet-cancel-x">&#x2715;</button>
+    </div>
+    <div id="save-snippet-body">
+      <p>Name this snippet:</p>
+      <input type="text" id="save-snippet-name" placeholder="e.g. weather cycle setup">
+      <div class="close-warn-btn-row">
+        <button class="close-warn-btn export-close" id="save-snippet-confirm">Save</button>
+        <button class="close-warn-btn" id="save-snippet-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
+<script>
+// ── Changelog ──
+(function() {
+  const body = document.getElementById('cl-body');
+  const overlay = document.getElementById('cl-overlay');
+  CHANGELOG.forEach(entry => {
+    const block = document.createElement('div');
+    block.className = 'cl-version-block';
+    const verRow = document.createElement('div');
+    verRow.className = 'cl-ver-row';
+    verRow.innerHTML = `<span class="cl-ver">${entry.version}</span><span class="cl-date">${entry.date}</span>`;
+    block.appendChild(verRow);
+    entry.changes.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'cl-entry';
+      const tagType = c.type || 'change';
+      row.innerHTML = `<span class="cl-tag ${tagType}">${tagType}</span><span>${c.text}</span>`;
+      block.appendChild(row);
+    });
+    body.appendChild(block);
+  });
+  document.getElementById('btn-changelog').addEventListener('click', () => overlay.classList.add('open'));
+  document.getElementById('cl-close').addEventListener('click', () => overlay.classList.remove('open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') {
+    overlay.classList.remove('open');
+    document.getElementById('docs-overlay').classList.remove('open');
+    document.getElementById('tips-overlay').classList.remove('open');
+    document.getElementById('import-overlay').classList.remove('open');
+    document.getElementById('close-warn-overlay').classList.remove('open');
+    document.getElementById('multiexport-overlay').classList.remove('open');
+    document.getElementById('snippets-overlay').classList.remove('open');
+    document.getElementById('save-snippet-overlay').classList.remove('open');
+  }});
+})();
+</script>
+<script>
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+
+  const LANG = 'cmdLang';
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const VAR_RE = /^%([a-zA-Z_]\w*)?$/;
+  function isValidUID(val) { return UUID_RE.test(val) || VAR_RE.test(val); }
+
+  const VEHICLE_ENUM    = ['GroundVehicle','Motar','ObjBig','RPG7v2','Mine','Flash','Breach','Igla','C4','HelicopterVehicle','Grenade','None'];
+  const BOT_SUB         = ['spawn','delete','alert','direct'];
+  const TRIGGER_SUB     = ['add','addbutton','remove','color','set','activate','reset','create','delete','executable','whitelist'];
+  const WORLD_SUB       = ['list','load'];
+  const TIME_SUB        = ['start','stop','now','set'];
+  const WEATHER_SUB     = ['lunar','set'];
+  const WEATHER_TYPE    = ['ClearSky','RonoClearSky','Overcast1','Overcast2','Overcast3','Fog1','Fog2','Fog3','Rain1','Rain2','Rain3','Storm1','Storm2','Storm3'];
+  const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','savemodel','deletemodel','insertmodel'];
+  const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
+  const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','IsLooping'];
+  const SQUAD_TYPES     = ['none','red','blue','orange','yellow','green'];
+  const COLLISION_TYPES = ['0','1','2','3'];
+  const TELEPORT_TYPES  = ['all','squad','player','other'];
+  const BOOL_EN         = ['enable','disable'];
+  const BOOL_LOCK       = ['lock','unlock'];
+  const BOOL_FF         = ['enable','disable','all'];
+  const NAVMESH_SUB     = ['editor','enable','disable','confirm','bake','add','join','unjoin','cover'];
+  const NAVMESH_COVER_TYPES = ['Center','Crouch','Right','Left','Prone'];
+  const MATERIALS       = ["asphalt_rough","asphalt_snow","asphalt_snow2","asphalt_snow_paint","asphalt_worn1","asphalt_worn2","asphalt_worn3","brick_clad","brick_clad2","brick_clad3","brick_clad4","brick_clad5","brick_clad5_clean","brick_clad6","brick_clad7","brick_clad8","brick_clad9","brick_clad10","brick_clad11","brick_default_dirty","brick_default_dirty2","brick_desert","brick_maya1","brick_maya2","brick_maya3","brick_maya4","brick_modern","brick_old","brick_old2","brick_rough","cobble_rubble1","cobble_rubble2","cobblestone_rocks1","concrete_ceiling","concrete_ceiling2","concrete_clad","concrete_clad2","concrete_clad_dirty","concrete_default_dirty","concrete_drywall","concrete_plaster1","concrete_plaster2","concrete_plaster2_stained","concrete_plaster3","concrete_plaster4","concrete_plaster5","concrete_plaster6","concrete_plaster7","concrete_plaster8","concrete_plate","concrete_plate2","concrete_roof","concrete_roof2","concrete_roof3","concrete_rough","concrete_shingle","concrete_slatetiles","concrete_sleepers","concrete_sleepers_stained","concrete_stucco","concrete_tile","concrete_tile2","concrete_tile2_snow","concrete_tile3","concrete_tile4","concrete_tile5","concrete_tile5_snow","concrete_tile5_snow2","concrete_tile6","concrete_worn","concrete_worn2","concrete_worn3","concrete_worn4","concrete_worn4_snow","corrodedmetal_rust","corrodedmetal_rust2","corrodedmetal_rust3","corrodedmetal_rust3_snow","corrodedmetal_sheets","corrodedmetal_sheets2","corrodedmetal_sheets3","diamondplate_oldthread","fabric_carpet1","fabric_carpet2","fabric_carpet3","fabric_worn1","glass_broken","grass_tropical","ground_dirt","ground_dirt2","leafygrass_grass","leafygrass_lawn","leather_zombie_1","marble_bigtiles","marble_checker","marble_polished","marble_polished2","marble_polished3","marble_smalltiles","marble_smalltiles2","marble_smalltiles2_dirty","marble_smalltiles3","marble_tiles","marble_tiles2","marble_tiles3","marble_tiles4","marble_tiles5","marble_tiles6","marble_tiles7","marble_tiles8","marble_tiles9","marble_tiles10","marble_tiles11","marble_tiles12","marble_vinyltile","marble_vinyltile_stained","marble_whiterectangle","metal_clad","metal_corrugated","metal_corrugated2","metal_corrugated3","metal_corrugated4","metal_corrugated5","metal_corrugated6","metal_dented","metal_diamondsheet","metal_painted","metal_siding","metal_worn","metal_worn2","metal_worn2_snow1","metal_worn2_snow2","mud_ground1","mud_ground1_snow","mud_tropical","pebble_gravel1","plastic_cautiontape","plastic_cautiontape2","plastic_tactile","plastic_tactile_snow","plastic_tarp","plastic_trash","plastic_trashbags","plastic_worn1","rock_cliff","rock_cliff2","rock_cliff3","rock_tropical1","rock_tropical2","sand_road1","sand_road2","sand_tropical","sand_tropical2","sand_tropical3","sand_tropical4","wood_bark1","wood_bark2","wood_bark3","wood_bark4","wood_bark5","wood_compositedeck","wood_log","wood_painted","wood_painted2","wood_particleboard","wood_particleboard2","wood_polished","wood_shingle1","wood_siding","wood_sliding2","wood_sliding3","wood_sliding4","wood_sliding5","wood_sliding6","wood_sliding6_snow2","woodplanks_fancyfloor","woodplanks_fancyfloor2","woodplanks_fancyfloor3","woodplanks_fancyfloor4","woodplanks_laminate","woodplanks_laminate2","woodplanks_laminate3","woodplanks_laminate4","woodplanks_plyplates"];
+
+  const CMDS = {
+    create:      { params: [{name:'world',type:'number',default:1},{name:'type',type:'enum',values:PART_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Spawn an object in the given world at position (pX, pY, pZ).', example: 'create 1 part 10 0 5' },
+    tween:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'duration',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Animate object pUID to position and rotation over duration seconds.', example: 'tween 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 2.5 10 0 5 0 90 0' },
+    color:       { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Set the colour of object pUID using RGB values (0–255).', example: 'color 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 255 128 0' },
+    material:    { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'material',type:'enum',values:MATERIALS}], doc: 'Apply a material to part pUID.', example: 'material 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx brick_clad' },
+    reset:       { params: [], doc: 'Reset the entire scene to its default state.', example: 'reset' },
+    explosion:   { params: [{name:'radius',type:'number'},{name:'damage',type:'number'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'target',type:'enum',values:VEHICLE_ENUM}], doc: 'Trigger an explosion at (pX, pY, pZ) with given radius, damage and target type.', example: 'explosion 10 50 0 0 0 GroundVehicle' },
+    move:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Moves and/or rotates a given part to the specified position and rotation.', example: 'move 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 5 0 5 0 45 0' },
+    size:        { params: [{name:'world',type:'number',default:1},{name:'pUID',type:'uid'},{name:'sX',type:'number'},{name:'sY',type:'number'},{name:'sZ',type:'number'}], doc: 'Resize the given part with the given X, Y, Z scale values.', example: 'size 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 4 2 4' },
+    wait:        { params: [{name:'duration',type:'number'}], doc: 'Waits a set number of seconds before the next command executes.', example: 'wait 3' },
+    ban:         { params: [{name:'player',type:'string'}], doc: 'Bans the specified player from the server.', example: 'ban PlayerName' },
+    kick:        { params: [{name:'player',type:'string'}], doc: 'Kicks the specified player from the server.', example: 'kick PlayerName' },
+    duplicate:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'}], doc: 'Duplicates the specified part in the given world.', example: 'duplicate 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+    rename:      { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'name',type:'string'}], doc: 'Renames the specified object.', example: 'rename 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx MyPart' },
+    squad:       { params: [{name:'player',type:'string'},{name:'squad',type:'enum',values:SQUAD_TYPES}], doc: 'Assigns a squad colour to the specified player.', example: 'squad PlayerName blue' },
+    compounds:   { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables compounds globally.', example: 'compounds enable' },
+    revive:      { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Enables or disables the revive mechanic.', example: 'revive disable' },
+    hud:         { params: [{name:'boolean',type:'enum',values:BOOL_EN}], doc: 'Shows or hides the HUD for all players.', example: 'hud disable' },
+    firstperson: { params: [{name:'boolean',type:'enum',values:BOOL_LOCK}], doc: 'Locks or unlocks first-person camera mode.', example: 'firstperson lock' },
+    friendlyfire:{ params: [{name:'boolean',type:'enum',values:BOOL_FF}], doc: 'Enables, disables, or forces friendly fire for all teams.', example: 'friendlyfire enable' },
+    collision:   { params: [{name:'world',type:'number'},{name:'pUID',type:'uid'},{name:'boolean',type:'enum',values:COLLISION_TYPES}], doc: 'Changes the collision attribute of a part. 0 = off, 1–3 = various modes.', example: 'collision 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 0' },
+    teleport:    { params: [{name:'type',type:'enum',values:TELEPORT_TYPES},{name:'target',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Teleports a player, squad, or all players to the specified position and rotation.', example: 'teleport player PlayerName 0 5 0 0 0 0' },
+    spawn:       { params: [{name:'world',type:'number'},{name:'propName',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rX',type:'number'},{name:'rY',type:'number'},{name:'rZ',type:'number'}], doc: 'Spawns the specified prop at the given position and rotation.', example: 'spawn 1 City1_Ext 0 0 0 0 0 0' },
+    weather: {
+      params: [{name:'subtype',type:'enum',values:WEATHER_SUB}],
+      subtypes: {
+        lunar: { params: [{name:'cycle',type:'enum',values:['1','2','3','4','5','6','7','8']}], doc: 'Sets lunar cycle to either 1-8.' },
+        set:   { params: [{name:'type',type:'enum',values:WEATHER_TYPE,default:''}], doc: 'Sets weather type. Omit to clear weather.' },
+      },
+      doc: 'Change weather and lunar options.',
+      example: 'weather set ClearSky\nweather set\nweather lunar 2',
+    },
+    trigger: {
+      params: [{name:'subtype',type:'enum',values:TRIGGER_SUB}],
+      subtypes: {
+        add:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds a trigger to the specified part.' },
+        addbutton:  { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Adds a button interact to the specified part.' },
+        remove:     { params: [{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Removes the trigger from the specified part.' },
+        color:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'r',type:'number'},{name:'g',type:'number'},{name:'b',type:'number'}], doc: 'Changes the trigger hitbox colour.' },
+        set:        { params: [{name:'world',type:'number'},{name:'uID',type:'uid'},{name:'triggerName',type:'string'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Applies the specified trigger to the specified part.' },
+        activate:   { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Activates the specified trigger.' },
+        reset:      { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Resets the specified trigger.' },
+        create:     { params: [{name:'world',type:'number'},{name:'name',type:'string'}], doc: 'Creates a new named trigger.' },
+        delete:     { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'}], doc: 'Deletes the specified trigger.' },
+        executable: { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'line',type:'number'},{name:'command',type:'command'}], doc: 'Adds a command to the specified line of a trigger.' },
+        whitelist:  { params: [{name:'world',type:'number'},{name:'triggerName',type:'string'},{name:'whitelist',type:'enum',values:WHITELIST_TYPES},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Manages the whitelist for the specified trigger.' },
+      },
+      doc: 'Create, edit, and attach commands to triggers.',
+      example: 'trigger create 1 myTrigger\ntrigger add 1 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\ntrigger activate 1 myTrigger',
+    },
+    bot: {
+      params: [{name:'subtype',type:'enum',values:BOT_SUB}],
+      subtypes: {
+        spawn:  { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rotation',type:'number',default:0}], doc: 'Spawns a bot at the specified location and rotation.' },
+        delete: { params: [{name:'bUID',type:'uid'}], doc: 'Deletes the specified bot.' },
+        alert:  { params: [{name:'world',type:'number'},{name:'boolean',type:'enum',values:['true','false']}], doc: 'Alerts or calms all bots in the specified world.' },
+        direct: { params: [{name:'bUID',type:'uid'},{name:'mode',type:'enum',values:['weak','strong','direct']},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Directs a bot to move to the specified position using the given priority mode.' },
+      },
+      doc: 'Spawn, delete, and control bots.',
+      example: 'bot spawn 1 Guard 0 0 0\nbot direct xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx strong 10 0 5',
+    },
+    world: {
+      params: [{name:'subtype',type:'enum',values:WORLD_SUB}],
+      subtypes: {
+        list: { params: [], doc: 'Lists all available worlds.' },
+        load: { params: [{name:'savefile',type:'string'},{name:'world',type:'number'}], doc: 'Loads a world from the specified savefile into the given world slot.' },
+      },
+      doc: 'Load or list worlds.',
+      example: 'world list\nworld load mySave 2',
+    },
+    time: {
+      params: [{name:'subtype',type:'enum',values:TIME_SUB}],
+      subtypes: {
+        start: { params: [], doc: 'Starts the time cycle.' },
+        stop:  { params: [], doc: 'Stops the time cycle.' },
+        now:   { params: [], doc: 'Returns the current time.' },
+        set:   { params: [{name:'time',type:'number'}], doc: 'Sets the time to a specific value.' },
+      },
+      doc: 'Control the in-game time cycle.',
+      example: 'time set 12\ntime start',
+    },
+    file: {
+      params: [{name:'subtype',type:'enum',values:FILE_SUB}],
+      subtypes: {
+        save:        { params: [{name:'name',type:'string'}], doc: 'Saves the current map with the given name.' },
+        load:        { params: [{name:'name',type:'string'}], doc: 'Loads the specified map file.' },
+        delete:      { params: [{name:'name',type:'string'}], doc: 'Deletes the specified map file.' },
+        loadcopy:    { params: [{name:'name',type:'string'}], doc: 'Loads a copy of the specified map file.' },
+        savecopy:    { params: [{name:'name',type:'string'}], doc: 'Saves a copy of the current map with the given name.' },
+        list:        { params: [], doc: 'Lists all available map files.' },
+        savemodel:   { params: [{name:'name',type:'string'},{name:'world',type:'number'},{name:'uID',type:'uid'}], doc: 'Saves the specified part as a named model.' },
+        deletemodel: { params: [{name:'name',type:'string'}], doc: 'Deletes the specified model file.' },
+        insertmodel: { params: [{name:'world',type:'number'},{name:'name',type:'string'},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'r',type:'number'}], doc: 'Inserts a saved model into the world at the specified position and rotation.' },
+      },
+      doc: 'Save, load, and manage map and model files.',
+      example: 'file save myMap\nfile list\nfile insertmodel 1 myModel 0 0 0 0',
+    },
+    navmesh: {
+      params: [{name:'subtype',type:'enum',values:NAVMESH_SUB}],
+      subtypes: {
+        editor:  { params: [], doc: 'Toggles the navmesh editor.' },
+        enable:  { params: [], doc: 'Enables custom navmesh.' },
+        disable: { params: [], doc: 'Disables custom navmesh.' },
+        confirm: { params: [], doc: 'Deletes all custom navmesh data.' },
+        bake:    { params: [], doc: 'Bakes custom navmesh.' },
+        add:     { params: [{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'}], doc: 'Adds a navmesh node at the specified position.' },
+        join:    { params: [{name:'nodeIdA',type:'number'},{name:'nodeIdB',type:'number'}], doc: 'Joins two navmesh nodes together.' },
+        unjoin:  { params: [{name:'nodeIdA',type:'number'},{name:'nodeIdB',type:'number'}], doc: 'Unjoins two navmesh nodes.' },
+        cover:   { params: [{name:'coverType',type:'enum',values:NAVMESH_COVER_TYPES},{name:'pX',type:'number'},{name:'pY',type:'number'},{name:'pZ',type:'number'},{name:'rotation',type:'number'}], doc: 'Creates a cover node. Center = shooting while standing, Crouch = shooting while crouched, Right/Left = shooting while leaning, Prone = shooting while prone.' },
+      },
+      doc: 'Toggle, edit, and bake the custom navmesh, including nodes and cover points.',
+      example: 'navMesh editor\nnavMesh enable\nnavMesh add 0 0 0\nnavMesh join 1 2\nnavMesh cover Center 0 0 0 90',
+    },
+  };
+
+  // ── Tips data ──
+  // Template for a new tip — copy the object below into the TIPS array underneath it,
+  // fill in the fields, and it'll show up in the Tips modal automatically.
+  //
+  // All fields use backticks (`...`), not 'quotes' or "quotes". This means you can type
+  // apostrophes/contractions (don't, it's, boolean's) and "double quotes" freely without
+  // escaping anything. You only need a backslash if you're writing a literal backtick (`)
+  // or a literal ${ sequence — neither of which comes up in normal tip text.
+  // Backticks also support real multi-line text directly (just press enter), so the
+  // string-concatenation ( + ) style below is no longer necessary, though \n\n still
+  // works too if you'd rather keep an entry on fewer lines.
+  //
+  // {
+  //   title:    `Short title shown in the sidebar and as the heading`,   // required
+  //   category: `Group label shown above related tips in the sidebar`,   // optional — omit to leave ungrouped
+  //   author:   `Your name`,                                             // optional — shown under the title
+  //   credit:   `Where this tip/trick came from`,                        // optional — shown under the title
+  //   body:     `Main tip text. Leave a blank line between sentences
+  //             to start a new paragraph. Links work two ways: bare
+  //             URLs (https://example.com) auto-link as-is, or use
+  //             [label text](https://example.com) for a custom label.`,
+  //   example:  `optional example\nspanning multiple lines`,             // optional — renders as a real
+  //                                                                       // read-only, syntax-highlighted
+  //                                                                       // editor box with an "Open in Editor"
+  //                                                                       // button. Fine for short examples;
+  //                                                                       // ignored if exampleFile is also set.
+  //   exampleFile: `media/examples/example.txt`,                         // optional — like `video`, but for the
+  //                                                                       // example box: a path to a .txt file,
+  //                                                                       // relative to THIS HTML file, fetched
+  //                                                                       // and rendered the same way `example`
+  //                                                                       // would be. Best for long examples
+  //                                                                       // you'd rather keep out of this array.
+  //                                                                       // There's no fallback if it fails to
+  //                                                                       // load (wrong path, or opened via
+  //                                                                       // file:// where fetch() of local files
+  //                                                                       // is blocked) — it just shows an error,
+  //                                                                       // by design, so viewers can't swap in
+  //                                                                       // a different file.
+  //   video:    `media/videos/example.mp4`,                              // optional — path to an .mp4,
+  //                                                                       // relative to THIS HTML file
+  //                                                                       // (not the current page), rendered
+  //                                                                       // as a native <video controls>
+  //                                                                       // player. Can also be an array of
+  //                                                                       // paths to show several videos.
+  //                                                                       // Same as exampleFile: if it fails to
+  //                                                                       // load there's no override option,
+  //                                                                       // just an error message with the path.
+  // },
+
+
+  const TIPS = [
+    {
+      title: `AI & Explosions`,
+      category: `AI`,
+      body: `Something about how you can use explosions for various things relating to AI.`,
+    },
+    {
+      title: `Using NavMesh`,
+      category: `AI`,
+      body: `a breakdown of how to use NavMesh`,
+    },
+    {
+      title: `Creating enemy compounds`,
+      category: `AI`,
+      credit: `fen0612`,
+      body: `A system that allows you to create compounds with a set of trigger boxes. The more specific guide is within the example, opening it in editor will allow you to see the specifics easier alongside the video.`,
+      exampleFile: `media/examples/enemyCompoundExample.txt`,
+      video: `media/videos/enemycompound.mp4`,
+    },
+    {
+      title: `Making circles`,
+      category: `QoL`,
+      body: `Making circles is easy, here is a [video guide](https://www.youtube.com/watch?v=ZaW3tEeWmjc) for it.`,
+    },
+    {
+      title: `Pasting coordinates`,
+      category: `Editor`,
+      body: `If you paste in coordinates that were copied with commas (like "10, 0, 5"), the editor automatically strips the commas from numeric parameters so you don't have to clean them up by hand.`,
+    },
+    {
+      title: `Managing tabs`,
+      category: `Editor`,
+      body: `Double-click a tab name to rename it. Drag a tab left or right to reorder it on the tab bar. Tabs, their contents, and their order are saved automatically, so you can safely close and reopen the editor.`,
+    },
+    {
+      title: `Import & export`,
+      category: `Editor`,
+      body: `Import accepts multiple .txt files at once — each one opens in its own new tab. Export lets you pick exactly which open tabs to download, so you don't have to export them one at a time.`,
+    },
+    {
+      title: `Comments`,
+      category: `Editor`,
+      body: `Start a line with // to write a comment. Anything after // on a line is ignored and will not be validated or executed.\n\nComments are useful for leaving notes for yourself or temporarily disabling a line without deleting it.`,
+      example: `// create initial part\ncreate 1 part 1 1 1`,
+    },
+    {
+      title: `Colour picker & shortcuts`,
+      category: `Editor`,
+      body: `Lines using the color command (and trigger color) show a small colour swatch next to the RGB values — click it to open a visual colour picker that rewrites the numbers for you.\n\nPress Ctrl+/ to comment or uncomment the selected lines.\n\nYou can also drag .txt files straight onto the editor window — each one opens in its own new tab.`,
+      example: `color 1 %myPart 255 128 0`,
+    },
+  ];
+
+  // ── Tab manager ──
+  let tabCounter = 0;
+  let activeTabId = null;
+  const tabs = {}; // id -> { name, model, viewState, debounce }
+
+  const tabsList = document.getElementById('tabs-list');
+  const editorWrap = document.getElementById('editor-wrap');
+
+  monaco.editor.defineTheme('cmdDark', {
+    base: 'vs-dark', inherit: true,
+    rules: [{ token: 'comment', foreground: '4a5a3a', fontStyle: 'italic' }],
+    colors: {},
+  });
+
+  monaco.languages.register({ id: LANG });
+  monaco.languages.setMonarchTokensProvider(LANG, {
+    tokenizer: {
+      root: [
+        [/\/\/.*$/, 'comment'],
+        [/\b(create|tween|bot|color|spawn|weather|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file|navMesh)\b/, 'keyword'],
+        [/(?<=\bfirstperson[ \t]+)\b(lock|unlock)\b/, 'constant'],
+        [/\b(true|false|enable|disable|all)\b/, 'constant'],
+        [/%[a-zA-Z_]\w*/, 'type'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...NAVMESH_SUB,...NAVMESH_COVER_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
+        [/-?\d+(\.\d+)?/, 'number'],
+        [/"[^"]*"/, 'string'],
+        [/'[^']*'/, 'string'],
+      ]
+    }
+  });
+
+  monaco.languages.setLanguageConfiguration(LANG, {
+    comments: { lineComment: '//' },
+    folding: {
+      markers: {
+        start: /^\s*\/\/\/\s*\S/,   // /// Title  -> opens a region
+        end: /^\s*\/\/\/\s*$/,      // ///        -> closes the nearest open region
+      },
+    },
+  });
+
+  // Single shared Monaco editor instance
+  const editor = monaco.editor.create(editorWrap, {
+    value: '', language: LANG, theme: 'cmdDark', fontSize: 14,
+    fontFamily: 'Consolas, "Courier New", monospace', lineNumbers: 'on',
+    minimap: { enabled: false }, scrollBeyondLastLine: false, renderLineHighlight: 'line',
+    tabSize: 2, wordWrap: 'off', parameterHints: { enabled: true, cycle: true },
+    quickSuggestions: { other: true, comments: false, strings: false },
+    suggestOnTriggerCharacters: true, acceptSuggestionOnEnter: 'on',
+    autoClosingBrackets: 'never', autoClosingQuotes: 'never',
+    inlayHints: { enabled: 'on' },
+    automaticLayout: true,
+  });
+
+  // ── Status bar wiring ──
+  const statusCursor = document.getElementById('status-cursor');
+  const statusStats = document.getElementById('status-stats');
+
+  editor.onDidChangeCursorPosition((e) => {
+    statusCursor.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+  });
+
+  // ── Problems panel: collapse / expand / resize ──
+  const errorPanel = document.getElementById('error-panel');
+  const errorResize = document.getElementById('error-resize');
+  let panelUserCollapsed = false;   // user chose to hide it -> don't auto-reopen
+  let lastErrorCount = 0;
+
+  // Start collapsed; it opens itself the first time real errors show up.
+  errorPanel.classList.add('collapsed');
+
+  function setPanelCollapsed(collapsed, byUser) {
+    errorPanel.classList.toggle('collapsed', collapsed);
+    if (byUser) panelUserCollapsed = collapsed;
+  }
+  document.getElementById('error-header').addEventListener('click', () => {
+    setPanelCollapsed(!errorPanel.classList.contains('collapsed'), true);
+  });
+  document.getElementById('status-problems').addEventListener('click', () => {
+    setPanelCollapsed(!errorPanel.classList.contains('collapsed'), true);
+  });
+
+  // Drag the strip above the panel to resize it (expands it if collapsed).
+  errorResize.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    errorResize.classList.add('dragging');
+    setPanelCollapsed(false, false);
+    const startY = e.clientY;
+    const startH = errorPanel.getBoundingClientRect().height;
+    const onMove = (ev) => {
+      const h = Math.max(60, Math.min(window.innerHeight * 0.6, startH + (startY - ev.clientY)));
+      errorPanel.style.height = h + 'px';
+    };
+    const onUp = () => {
+      errorResize.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  function updateStatusProblems(errors, warnings) {
+    const spErr = document.getElementById('sp-err');
+    const spWarn = document.getElementById('sp-warn');
+    spErr.textContent = `\u2717 ${errors}`;
+    spWarn.textContent = `\u26a0 ${warnings}`;
+    spErr.classList.toggle('has', errors > 0);
+    spWarn.classList.toggle('has', warnings > 0);
+    // Auto-open on newly appearing errors, unless the user closed it themselves.
+    if (errors > lastErrorCount && !panelUserCollapsed) setPanelCollapsed(false, false);
+    if (errors === 0 && warnings === 0 && !panelUserCollapsed) setPanelCollapsed(true, false);
+    lastErrorCount = errors;
+  }
+
+  function updateStatusStats(model) {
+    if (!model) return;
+    let cmdCount = 0, waitTotal = 0;
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const tokens = parseLine(model.getLineContent(ln));
+      if (!tokens.length) continue;
+      const cmdName = tokens[0].value.toLowerCase();
+      if (!CMDS[cmdName]) continue;
+      cmdCount++;
+      if (cmdName === 'wait' && tokens[1]) {
+        const n = Number(tokens[1].value);
+        if (!isNaN(n)) waitTotal += n;
+      }
+    }
+    let html = `<span>${cmdCount} command${cmdCount === 1 ? '' : 's'}</span>`;
+    if (waitTotal > 0) html += `<span>${+waitTotal.toFixed(2)}s total wait</span>`;
+    statusStats.innerHTML = html;
+  }
+
+  // Right-click a selection -> "Save Snippet". Only appears when text is selected.
+  editor.addAction({
+    id: 'save-snippet',
+    label: 'Save Snippet',
+    contextMenuGroupId: 'zzz-snippet',
+    contextMenuOrder: 1,
+    precondition: 'editorHasSelection',
+    run: (ed) => {
+      const sel = ed.getSelection();
+      const text = ed.getModel().getValueInRange(sel);
+      if (text) openSaveSnippetDialog(text);
+    },
+  });
+
+  // ── Tab drag-to-reorder ──
+  let dragSrcId = null;
+
+  function attachDragHandlers(tabEl) {
+    tabEl.setAttribute('draggable', 'true');
+
+    tabEl.addEventListener('dragstart', (e) => {
+      dragSrcId = tabEl.dataset.id;
+      tabEl.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragSrcId);
+    });
+
+    tabEl.addEventListener('dragend', () => {
+      tabEl.classList.remove('dragging');
+      tabsList.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('drag-over-left', 'drag-over-right');
+      });
+      dragSrcId = null;
+    });
+
+    tabEl.addEventListener('dragover', (e) => {
+      if (!dragSrcId || dragSrcId === tabEl.dataset.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = tabEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      tabsList.querySelectorAll('.tab').forEach(t => t.classList.remove('drag-over-left', 'drag-over-right'));
+      tabEl.classList.add(e.clientX < midX ? 'drag-over-left' : 'drag-over-right');
+    });
+
+    tabEl.addEventListener('dragleave', () => {
+      tabEl.classList.remove('drag-over-left', 'drag-over-right');
+    });
+
+    tabEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!dragSrcId || dragSrcId === tabEl.dataset.id) return;
+
+      const srcEl = tabsList.querySelector(`[data-id="${dragSrcId}"]`);
+      if (!srcEl) return;
+
+      const rect = tabEl.getBoundingClientRect();
+      const dropBefore = e.clientX < rect.left + rect.width / 2;
+
+      if (dropBefore) {
+        tabsList.insertBefore(srcEl, tabEl);
+      } else {
+        tabEl.after(srcEl);
+      }
+
+      tabEl.classList.remove('drag-over-left', 'drag-over-right');
+      saveSession();
+    });
+  }
+
+  function createTab(name, content) {
+    tabCounter++;
+    const id = 'tab_' + tabCounter;
+    const tabName = name || ('commands' + tabCounter);
+    const model = monaco.editor.createModel(content || '', LANG);
+
+    tabs[id] = { name: tabName, model, viewState: null };
+
+    // Build tab DOM
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.id = id;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tab-name';
+    nameEl.textContent = tabName;
+    nameEl.title = 'Double-click to rename';
+
+    const closeEl = document.createElement('span');
+    closeEl.className = 'tab-close';
+    closeEl.innerHTML = '&#x2715;';
+    closeEl.title = 'Close tab';
+
+    tabEl.appendChild(nameEl);
+    tabEl.appendChild(closeEl);
+    tabsList.appendChild(tabEl);
+
+    // Click to switch
+    tabEl.addEventListener('click', (e) => {
+      if (e.target === closeEl) return;
+      switchTab(id);
+    });
+
+    // Double-click name to rename
+    nameEl.addEventListener('dblclick', () => startRename(id, tabEl, nameEl));
+
+    // Close tab
+    closeEl.addEventListener('click', () => closeTab(id));
+
+    // Drag to reorder
+    attachDragHandlers(tabEl);
+
+    // Validate on model change + save session
+    model.onDidChangeContent(() => {
+      clearTimeout(tabs[id].debounce);
+      tabs[id].debounce = setTimeout(() => {
+        if (activeTabId === id) { validate(model, editor); updateOutline(); }
+        saveSession();
+      }, 250);
+    });
+
+    switchTab(id);
+    return id;
+  }
+
+  function switchTab(id) {
+    if (activeTabId === id) return;
+
+    // Save view state of current tab
+    if (activeTabId && tabs[activeTabId]) {
+      tabs[activeTabId].viewState = editor.saveViewState();
+    }
+
+    // Deactivate old tab
+    tabsList.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+    activeTabId = id;
+    const tab = tabs[id];
+
+    // Set model
+    editor.setModel(tab.model);
+    if (tab.viewState) editor.restoreViewState(tab.viewState);
+    editor.focus();
+
+    // Activate tab element
+    const tabEl = tabsList.querySelector(`[data-id="${id}"]`);
+    if (tabEl) tabEl.classList.add('active');
+
+    // Re-validate
+    validate(tab.model, editor);
+    updateOutline();
+    saveSession();
+  }
+
+  function exportTab(id) {
+    const tab = tabs[id];
+    if (!tab) return;
+    const blob = new Blob([tab.model.getValue()], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = tab.name + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  let pendingCloseId = null;
+
+  function closeTab(id) {
+    const ids = Object.keys(tabs);
+    if (ids.length === 1) return; // keep at least one tab
+
+    const tab = tabs[id];
+    if (!tab) return;
+
+    // Show warning before closing
+    document.getElementById('close-warn-tabname').textContent = tab.name;
+    pendingCloseId = id;
+    document.getElementById('close-warn-overlay').classList.add('open');
+  }
+
+  function doCloseTab(id) {
+    const ids = Object.keys(tabs);
+    if (ids.length === 1) return;
+
+    const tabEl = tabsList.querySelector(`[data-id="${id}"]`);
+    if (tabEl) tabEl.remove();
+
+    const wasActive = activeTabId === id;
+    tabs[id].model.dispose();
+    delete tabs[id];
+
+    if (wasActive) {
+      const remaining = Object.keys(tabs);
+      if (remaining.length) switchTab(remaining[remaining.length - 1]);
+    }
+    saveSession();
+  }
+
+  // Close-warning modal handlers
+  document.getElementById('close-warn-export-close').addEventListener('click', () => {
+    if (pendingCloseId) { exportTab(pendingCloseId); doCloseTab(pendingCloseId); pendingCloseId = null; }
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+  document.getElementById('close-warn-just-close').addEventListener('click', () => {
+    if (pendingCloseId) { doCloseTab(pendingCloseId); pendingCloseId = null; }
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+  document.getElementById('close-warn-cancel').addEventListener('click', () => {
+    pendingCloseId = null;
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+  document.getElementById('close-warn-cancel2').addEventListener('click', () => {
+    pendingCloseId = null;
+    document.getElementById('close-warn-overlay').classList.remove('open');
+  });
+
+  function startRename(id, tabEl, nameEl) {
+    const input = document.createElement('input');
+    input.className = 'tab-name-input';
+    input.value = tabs[id].name;
+    tabEl.replaceChild(input, nameEl);
+    input.focus();
+    input.select();
+
+    function commitRename() {
+      const newName = input.value.trim() || tabs[id].name;
+      tabs[id].name = newName;
+      nameEl.textContent = newName;
+      tabEl.replaceChild(nameEl, input);
+      saveSession();
+    }
+
+    input.addEventListener('blur', commitRename);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = tabs[id].name; input.blur(); }
+    });
+  }
+
+  // ── Language features (shared, operate on active model) ──
+
+  function parseLine(line) {
+    const commentIdx = line.indexOf('//');
+    const stripped = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    const trimmed = stripped.trimStart();
+    const leadingSpaces = stripped.length - trimmed.length;
+    const tokens = [];
+    let i = 0;
+    while (i < trimmed.length) {
+      if (trimmed[i] === ' ') { i++; continue; }
+      const start = i;
+      while (i < trimmed.length && trimmed[i] !== ' ') i++;
+      tokens.push({ value: trimmed.slice(start, i), col: leadingSpaces + start + 1 });
+    }
+    return tokens;
+  }
+
+  function getRestParamIndex(params) { return params.findIndex(p => p.type === 'command'); }
+
+  function parseLineWithRest(line, restTokenIdx) {
+    const tokens = parseLine(line);
+    if (restTokenIdx < 0 || tokens.length <= restTokenIdx) return tokens;
+    const restCol = tokens[restTokenIdx].col;
+    const rawRest = line.slice(restCol - 1);
+    const commentIdx = rawRest.indexOf('//');
+    const restVal = commentIdx >= 0 ? rawRest.slice(0, commentIdx).trimEnd() : rawRest;
+    return [...tokens.slice(0, restTokenIdx), { value: restVal, col: restCol, isRest: true }];
+  }
+
+  function getTokens(line) {
+    const raw = parseLine(line);
+    if (!raw.length) return raw;
+    const spec = CMDS[raw[0].value.toLowerCase()];
+    if (!spec) return raw;
+    const params = resolveParams(spec, raw);
+    const restIdx = getRestParamIndex(params);
+    if (restIdx < 0) return raw;
+    return parseLineWithRest(line, restIdx + 1);
+  }
+
+  function resolveParams(spec, tokens) {
+    if (!spec.subtypes) return spec.params;
+    const subtypeVal = tokens[1] ? tokens[1].value : null;
+    const sub = subtypeVal && spec.subtypes[subtypeVal];
+    const extra = sub ? (sub.params ?? sub) : [];
+    return [...spec.params, ...extra];
+  }
+
+  function getActiveParamIndex(tokens, cursorCol) {
+    let paramIdx = -1;
+    for (let i = 0; i < tokens.length; i++) { if (tokens[i].col <= cursorCol) paramIdx = i - 1; }
+    const last = tokens[tokens.length - 1];
+    if (last && cursorCol > last.col + last.value.length) paramIdx = tokens.length - 1;
+    return Math.max(0, paramIdx);
+  }
+
+  function paramLabel(p) {
+    if (p.type === 'enum')    return `${p.name}: ${p.values.slice(0,5).join('|')}${p.values.length > 5 ? '|...' : ''}`;
+    if (p.type === 'uid')     return `${p.name}: uid`;
+    if (p.type === 'command') return `${p.name}: <command>`;
+    let label = `${p.name}: ${p.type}`;
+    if (p.default !== undefined) label += ` = ${p.default}`;
+    return label;
+  }
+
+  function paramDoc(p) {
+    if (p.type === 'enum')    return { value: `Valid values:\n${p.values.map(v => '- ' + v).join('\n')}` };
+    if (p.type === 'uid')     return { value: 'Expected format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, `%variableName`, or just `%` on its own' };
+    if (p.type === 'command') return { value: `A full command to execute.\nValid commands: ${Object.keys(CMDS).join(', ')}` };
+    return { value: `Type: ${p.type}` };
+  }
+
+  function nestedCommandSuggestions(nestedText, cursorCol, range) {
+    const textUpToCursor = nestedText.slice(0, cursorCol);
+    const tokensUpToCursor = parseLine(textUpToCursor);
+    if (!tokensUpToCursor.length || (tokensUpToCursor.length === 1 && !textUpToCursor.endsWith(' '))) {
+      return Object.entries(CMDS).map(([name, spec]) => ({
+        label: name, kind: monaco.languages.CompletionItemKind.Function,
+        detail: spec.params.map(p => p.name).join(' '), documentation: { value: spec.doc }, insertText: name, range
+      }));
+    }
+    const nestedSpec = CMDS[tokensUpToCursor[0].value.toLowerCase()];
+    if (!nestedSpec) return [];
+    const nestedParams = resolveParams(nestedSpec, tokensUpToCursor);
+    const paramIdx = textUpToCursor.endsWith(' ') ? tokensUpToCursor.length - 1 : tokensUpToCursor.length - 2;
+    if (paramIdx < 0 || paramIdx >= nestedParams.length) return [];
+    const param = nestedParams[paramIdx];
+    if (param.type !== 'enum') return [];
+    return param.values.map(v => ({ label: v, kind: monaco.languages.CompletionItemKind.EnumMember, insertText: v, range }));
+  }
+
+  function nestedCommandSignature(nestedText, cursorCol, outerCmdName) {
+    const tokens = parseLine(nestedText);
+    if (!tokens.length) return null;
+    const spec = CMDS[tokens[0].value.toLowerCase()];
+    if (!spec) return null;
+    const params = resolveParams(spec, tokens);
+    if (!params.length) return null;
+    const activeParam = getActiveParamIndex(parseLine(nestedText.slice(0, cursorCol)), cursorCol);
+    const paramLabels = params.map(paramLabel);
+    return {
+      value: {
+        signatures: [{ label: `[${outerCmdName}] ${tokens[0].value}  ${paramLabels.join('  ')}`, documentation: { value: spec.doc },
+          parameters: params.map((p, idx) => ({ label: paramLabels[idx], documentation: paramDoc(p) })) }],
+        activeSignature: 0, activeParameter: Math.min(activeParam, params.length - 1)
+      }, dispose() {}
+    };
+  }
+
+  monaco.languages.registerSignatureHelpProvider(LANG, {
+    signatureHelpTriggerCharacters: [' ', '\t'],
+    signatureHelpRetriggerCharacters: [' '],
+    provideSignatureHelp(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const tokens = getTokens(line);
+      if (!tokens.length) return null;
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) return null;
+      const params = resolveParams(spec, tokens);
+      if (!params.length) return null;
+      const activeParam = getActiveParamIndex(tokens, position.column);
+      const currentParam = params[Math.min(activeParam, params.length - 1)];
+      if (currentParam && currentParam.type === 'command') {
+        const restToken = tokens.find(t => t.isRest);
+        if (restToken) return nestedCommandSignature(restToken.value, position.column - restToken.col, cmdName);
+      }
+      const paramLabels = params.map(paramLabel);
+      return {
+        value: {
+          signatures: [{ label: `${cmdName}  ${paramLabels.join('  ')}`, documentation: { value: spec.doc },
+            parameters: params.map((p, idx) => ({ label: paramLabels[idx], documentation: paramDoc(p) })) }],
+          activeSignature: 0, activeParameter: Math.min(activeParam, params.length - 1)
+        }, dispose() {}
+      };
+    }
+  });
+
+  monaco.languages.registerCompletionItemProvider(LANG, {
+    triggerCharacters: [' ', '\t'],
+    provideCompletionItems(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const textBefore = line.slice(0, position.column - 1);
+      const commentIdx = textBefore.indexOf('//');
+      if (commentIdx >= 0) return { suggestions: [] };
+      const rawTokensBefore = parseLine(textBefore);
+      const wordInfo = model.getWordUntilPosition(position);
+      const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: wordInfo.startColumn || position.column, endColumn: wordInfo.endColumn || position.column };
+      if (!rawTokensBefore.length || (rawTokensBefore.length === 1 && !textBefore.endsWith(' '))) {
+        return { suggestions: Object.entries(CMDS).map(([name, spec]) => ({
+          label: name, kind: monaco.languages.CompletionItemKind.Function,
+          detail: spec.params.map(p => p.name).join(' '), documentation: { value: spec.doc }, insertText: name, range
+        })) };
+      }
+      const cmdName = rawTokensBefore[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) return { suggestions: [] };
+      const params = resolveParams(spec, rawTokensBefore);
+      const restIdx = getRestParamIndex(params);
+      if (restIdx >= 0) {
+        const restTokenIdx = restIdx + 1;
+        const rawAll = parseLine(textBefore);
+        if (rawAll.length > restTokenIdx || (rawAll.length === restTokenIdx && textBefore.endsWith(' '))) {
+          const restTokens = rawAll.slice(restTokenIdx);
+          let nestedText = '', cursorInNested = 0;
+          if (restTokens.length > 0) { nestedText = textBefore.slice(restTokens[0].col - 1); cursorInNested = nestedText.length; }
+          return { suggestions: nestedCommandSuggestions(nestedText, cursorInNested, range) };
+        }
+      }
+      const paramIdx = textBefore.endsWith(' ') ? rawTokensBefore.length - 1 : rawTokensBefore.length - 2;
+      if (paramIdx < 0 || paramIdx >= params.length) return { suggestions: [] };
+      const param = params[paramIdx];
+      if (param.type !== 'enum') return { suggestions: [] };
+      return { suggestions: param.values.map(v => ({ label: v, kind: monaco.languages.CompletionItemKind.EnumMember, insertText: v, range })) };
+    }
+  });
+
+  monaco.languages.registerHoverProvider(LANG, {
+    provideHover(model, position) {
+      const line = model.getLineContent(position.lineNumber);
+      const commentIdx = line.indexOf('//');
+      if (commentIdx >= 0 && position.column > commentIdx) return null;
+      const tokens = getTokens(line);
+      if (!tokens.length) return null;
+      const word = model.getWordAtPosition(position);
+      if (!word) return null;
+      const cmdName = tokens[0].value.toLowerCase();
+      if (word.word.toLowerCase() === cmdName) {
+        const spec = CMDS[cmdName];
+        if (!spec) return null;
+        return { contents: [{ value: `**${cmdName}** ${spec.params.map(p => p.name).join(' ')}` }, { value: spec.doc }] };
+      }
+      const spec = CMDS[cmdName];
+      if (!spec) return null;
+      const params = resolveParams(spec, tokens);
+      const tokIdx = tokens.findIndex(t => t.col <= position.column && position.column <= t.col + t.value.length);
+      if (tokIdx <= 0) return null;
+      const param = params[tokIdx - 1];
+      if (!param) return null;
+      if (param.type === 'command' && tokens[tokIdx].isRest) {
+        const restToken = tokens[tokIdx];
+        const offsetInRest = position.column - restToken.col;
+        const nestedTokens = parseLine(restToken.value);
+        if (nestedTokens.length) {
+          const nestedSpec = CMDS[nestedTokens[0].value.toLowerCase()];
+          if (nestedSpec) {
+            const nestedTokIdx = nestedTokens.findIndex(t => t.col - 1 <= offsetInRest && offsetInRest <= t.col - 1 + t.value.length);
+            if (nestedTokIdx === 0) return { contents: [{ value: `**${nestedTokens[0].value}** (nested)` }, { value: nestedSpec.doc }] };
+            if (nestedTokIdx > 0) {
+              const np = resolveParams(nestedSpec, nestedTokens)[nestedTokIdx - 1];
+              if (np) return { contents: [{ value: `**${np.name}** — \`${np.type}\`` }, paramDoc(np)] };
+            }
+          }
+        }
+      }
+      const header = `**${param.name}** — \`${param.type}\`` + (param.default !== undefined ? ` (default: \`${param.default}\`)` : '');
+      return { contents: [{ value: header }, paramDoc(param)] };
+    }
+  });
+
+  monaco.languages.registerInlayHintsProvider(LANG, {
+    provideInlayHints(model) {
+      const hints = [];
+      for (let ln = 1; ln <= model.getLineCount(); ln++) {
+        const line = model.getLineContent(ln);
+        const tokens = getTokens(line);
+        if (!tokens.length) continue;
+        const cmdName = tokens[0].value.toLowerCase();
+        const spec = CMDS[cmdName];
+        if (!spec) continue;
+        const params = resolveParams(spec, tokens);
+        const args = tokens.slice(1);
+        args.forEach((arg, i) => {
+          if (i >= params.length) return;
+          hints.push({ kind: monaco.languages.InlayHintKind.Parameter, position: { lineNumber: ln, column: arg.col }, label: params[i].name + ':', paddingRight: true });
+        });
+      }
+      return { hints, dispose() {} };
+    }
+  });
+
+  // ── Colour swatches + picker for `color` and `trigger color` ──
+  // Shows an inline swatch next to the RGB triplet; clicking it opens Monaco's
+  // colour picker, and picking a colour rewrites the three number tokens.
+  function clamp255(n) { return Math.max(0, Math.min(255, Math.round(n))); }
+
+  monaco.languages.registerColorProvider(LANG, {
+    provideDocumentColors(model) {
+      const colors = [];
+      for (let ln = 1; ln <= model.getLineCount(); ln++) {
+        const line = model.getLineContent(ln);
+        const tokens = parseLine(line);
+        if (tokens.length < 2) continue;
+        const cmdName = tokens[0].value.toLowerCase();
+        let rgbStart = -1;
+        if (cmdName === 'color' && tokens.length >= 5) rgbStart = 2;                                        // color world pUID r g b
+        else if (cmdName === 'trigger' && tokens[1].value === 'color' && tokens.length >= 7) rgbStart = 4;  // trigger color world name r g b
+        if (rgbStart < 0 || tokens.length < rgbStart + 3) continue;
+        const [rT, gT, bT] = [tokens[rgbStart], tokens[rgbStart + 1], tokens[rgbStart + 2]];
+        const r = Number(rT.value), g = Number(gT.value), b = Number(bT.value);
+        if ([r, g, b].some(isNaN)) continue;
+        colors.push({
+          color: { red: clamp255(r) / 255, green: clamp255(g) / 255, blue: clamp255(b) / 255, alpha: 1 },
+          range: new monaco.Range(ln, rT.col, ln, bT.col + bT.value.length),
+        });
+      }
+      return colors;
+    },
+    provideColorPresentations(model, colorInfo) {
+      const c = colorInfo.color;
+      const label = `${clamp255(c.red * 255)} ${clamp255(c.green * 255)} ${clamp255(c.blue * 255)}`;
+      return [{ label, textEdit: { range: colorInfo.range, text: label } }];
+    }
+  });
+
+  let currentMarkers = [];
+  function severityLabel(s) {
+    if (s === monaco.MarkerSeverity.Error)   return { label: 'x', cls: 'error',   text: 'error' };
+    if (s === monaco.MarkerSeverity.Warning) return { label: '!', cls: 'warning', text: 'warning' };
+    return { label: 'i', cls: 'hint', text: 'hint' };
+  }
+
+  function updateErrorPanel(markers, editorRef) {
+    currentMarkers = markers;
+    const list = document.getElementById('error-list');
+    const count = document.getElementById('error-count');
+    const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error).length;
+    const warnings = markers.filter(m => m.severity === monaco.MarkerSeverity.Warning).length;
+    let countStr = '';
+    if (errors)   countStr += `${errors} error${errors>1?'s':''}`;
+    if (warnings) countStr += (countStr ? ', ' : '') + `${warnings} warning${warnings>1?'s':''}`;
+    count.textContent = countStr || '0 errors';
+    count.style.color = errors ? '#e06c75' : warnings ? '#e5c07b' : '#4a4a4a';
+    if (typeof updateStatusProblems === 'function') updateStatusProblems(errors, warnings);
+    if (!markers.length) { list.innerHTML = '<div id="no-errors">no errors</div>'; return; }
+    list.innerHTML = markers.map((m, i) => {
+      const s = severityLabel(m.severity);
+      const msg = m.message.replace(/\n/g, ' ');
+      return `<div class="err-row" data-idx="${i}"><span class="err-icon ${s.cls}">${s.label}</span><span class="err-pos">Ln ${m.startLineNumber}</span><span class="err-pos">Col ${m.startColumn}</span><span class="err-msg" title="${msg}">[${s.text}] ${msg}</span></div>`;
+    }).join('');
+    list.querySelectorAll('.err-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const m = currentMarkers[+row.dataset.idx];
+        editorRef.setPosition({ lineNumber: m.startLineNumber, column: m.startColumn });
+        editorRef.revealLineInCenter(m.startLineNumber);
+        editorRef.focus();
+      });
+    });
+  }
+
+  function validate(model, editorRef) {
+    const markers = [];
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const line = model.getLineContent(ln);
+      const trimmed = line.trimStart();
+      if (trimmed.startsWith('//') || trimmed === '') continue;
+      const tokens = getTokens(line);
+      if (!tokens.length) continue;
+      const cmdName = tokens[0].value.toLowerCase();
+      const spec = CMDS[cmdName];
+      if (!spec) {
+        markers.push({ severity: monaco.MarkerSeverity.Error, message: `Unknown command "${tokens[0].value}"`, startLineNumber: ln, endLineNumber: ln, startColumn: tokens[0].col, endColumn: tokens[0].col + tokens[0].value.length });
+        continue;
+      }
+      const params = resolveParams(spec, tokens);
+      const args = tokens.slice(1);
+      for (let i = 0; i < args.length; i++) {
+        if (i >= params.length) {
+          markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${args[i].value}" - ${cmdName} takes ${params.length} argument(s)`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + args[i].value.length });
+          continue;
+        }
+        const param = params[i]; const val = args[i].value;
+        if (param.type === 'number' && isNaN(Number(val))) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a number, got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'enum' && !param.values.includes(val)) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${val}" is not valid for "${param.name}". Expected one of: ${param.values.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'uid' && !isValidUID(val)) {
+          markers.push({ severity: monaco.MarkerSeverity.Error, message: `Parameter "${param.name}" expects a UID or variable (e.g. %myVar), got "${val}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + val.length });
+        } else if (param.type === 'command') {
+          const nestedTokens = parseLine(val);
+          if (nestedTokens.length) {
+            const nestedCmdName = nestedTokens[0].value.toLowerCase();
+            if (!CMDS[nestedCmdName]) {
+              markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${nestedCmdName}" is not a valid command`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col, endColumn: args[i].col + nestedTokens[0].value.length });
+            } else {
+              const nestedSpec = CMDS[nestedCmdName];
+              const nestedParams = resolveParams(nestedSpec, nestedTokens);
+              const nestedArgs = nestedTokens.slice(1);
+              for (let j = 0; j < nestedArgs.length; j++) {
+                if (j >= nestedParams.length) { markers.push({ severity: monaco.MarkerSeverity.Warning, message: `Extra argument "${nestedArgs[j].value}" for nested command "${nestedCmdName}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nestedArgs[j].value.length }); continue; }
+                const np = nestedParams[j]; const nv = nestedArgs[j].value;
+                if (np.type === 'number' && isNaN(Number(nv))) markers.push({ severity: monaco.MarkerSeverity.Error, message: `Nested param "${np.name}" expects a number, got "${nv}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                else if (np.type === 'enum' && !np.values.includes(nv)) markers.push({ severity: monaco.MarkerSeverity.Error, message: `"${nv}" is not valid for nested param "${np.name}"`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+                else if (np.type === 'uid' && !isValidUID(nv)) markers.push({ severity: monaco.MarkerSeverity.Error, message: `Nested param "${np.name}" expects a UID or %variable`, startLineNumber: ln, endLineNumber: ln, startColumn: args[i].col + nestedArgs[j].col - 1, endColumn: args[i].col + nestedArgs[j].col - 1 + nv.length });
+              }
+              if (nestedArgs.length < nestedParams.length) {
+                const missing = nestedParams.slice(nestedArgs.length).filter(p => p.default === undefined).map(p => p.name);
+                if (missing.length) markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Nested command missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: line.length + 1, endColumn: line.length + 2 });
+              }
+            }
+          }
+        }
+      }
+      if (args.length < params.length) {
+        const missing = params.slice(args.length).filter(p => p.default === undefined).map(p => p.name);
+        if (missing.length) markers.push({ severity: monaco.MarkerSeverity.Hint, message: `Missing argument(s): ${missing.join(', ')}`, startLineNumber: ln, endLineNumber: ln, startColumn: line.length + 1, endColumn: line.length + 2 });
+      }
+    }
+    monaco.editor.setModelMarkers(model, LANG, markers);
+    updateErrorPanel(markers, editorRef);
+    updateStatusStats(model);
+  }
+
+  function cleanPastedLine(line) {
+    if (!line.includes(',')) return line;
+    const raw = line.trimStart();
+    const indent = line.slice(0, line.length - raw.length);
+    const parts = raw.split(/\s+/);
+    if (!parts.length) return line;
+    const cmdName = parts[0].toLowerCase();
+    const spec = CMDS[cmdName];
+    if (!spec) return indent + parts.map(p => p.replace(/,/g, '')).join(' ');
+    const cleanParts = parts.map(p => p.replace(/,/g, ''));
+    const fakeTokens = cleanParts.map((v, i) => ({ value: v, col: i + 1 }));
+    const params = resolveParams(spec, fakeTokens);
+    const result = parts.map((part, i) => {
+      if (i === 0) return part;
+      const paramIdx = i - 1;
+      if (paramIdx >= params.length) return part;
+      if (params[paramIdx].type === 'number') return part.replace(/,/g, '');
+      return part;
+    });
+    return indent + result.join(' ');
+  }
+
+  editor.onDidPaste((e) => {
+    const model = editor.getModel();
+    const edits = [];
+    for (let ln = e.range.startLineNumber; ln <= e.range.endLineNumber; ln++) {
+      const original = model.getLineContent(ln);
+      const cleaned  = cleanPastedLine(original);
+      if (cleaned !== original) edits.push({ range: new monaco.Range(ln, 1, ln, original.length + 1), text: cleaned });
+    }
+    if (edits.length) editor.executeEdits('paste-comma-clean', edits);
+  });
+
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerSuggest', {}));
+  editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => editor.trigger('keyboard', 'editor.action.triggerParameterHints', {}));
+
+  // ── Command-block formatter ──
+  // Best-effort reformatter for command text that lost its line breaks (e.g. text
+  // that was pasted through something that flattened it to one line). It uses two
+  // rules learned from how this flattening tends to happen in practice:
+  //  1. "//" always starts a new line, wherever it appears.
+  //  2. A known top-level command keyword starts a new line only when it's preceded
+  //     by 2+ spaces — a single space means it's an argument of the current command
+  //     (e.g. "trigger reset ..." or "trigger create ..." must stay on one line,
+  //     since 'reset'/'create' are also valid trigger subtypes).
+  const CMD_KEYWORDS = Object.keys(CMDS);
+  const CMD_BREAK_RE = new RegExp('[ \\t]{2,}(' + CMD_KEYWORDS.join('|') + ')\\b', 'gi');
+
+  function formatCommandText(raw) {
+    if (!raw) return raw;
+    let text = raw.replace(/(?<!:)\/\//g, '\n//'); // skip URL schemes like https://
+    text = text.replace(CMD_BREAK_RE, '\n$1');
+    const lines = text.split('\n').map(line => line.trim().replace(/[ \t]{2,}/g, ' '));
+    while (lines.length && lines[0] === '') lines.shift();
+    return lines.join('\n');
+  }
+
+  // ── Text helpers for rendering tip bodies safely ──
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Converts plain text into safe HTML, turning URLs into clickable links.
+  // Supports bare URLs (https://example.com) and markdown-style [label](url) links.
+  function linkifyText(raw) {
+    const placeholders = [];
+    const stash = (html) => {
+      const token = '\u0000LINK' + placeholders.length + '\u0000';
+      placeholders.push(html);
+      return token;
+    };
+
+    // Markdown-style [label](url) links, pulled out first so their url isn't
+    // double-processed by the bare-URL pass below.
+    let working = raw.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (match, label, url) =>
+      stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="tip-link">${escapeHtml(label)}</a>`)
+    );
+
+    // Bare URLs. Trailing punctuation (., ,, ), etc.) is kept outside the link
+    // since it's usually sentence punctuation, not part of the URL.
+    working = working.replace(/\bhttps?:\/\/[^\s<>"']+/g, (match) => {
+      let url = match;
+      let trailing = '';
+      const trailMatch = url.match(/[).,;:!?\]]+$/);
+      if (trailMatch) { trailing = trailMatch[0]; url = url.slice(0, -trailing.length); }
+      return stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="tip-link">${escapeHtml(url)}</a>`) + trailing;
+    });
+
+    // Escape everything else, then splice the pre-built link HTML back in
+    // (placeholder tokens use \u0000, which escapeHtml leaves untouched).
+    let escaped = escapeHtml(working);
+    escaped = escaped.replace(/\u0000LINK(\d+)\u0000/g, (match, idx) => placeholders[Number(idx)]);
+    return escaped;
+  }
+
+  // ── New tab button ──
+  document.getElementById('btn-new-tab').addEventListener('click', () => { createTab(); saveSession(); });
+
+  // ── Multi-export modal ──
+  function openMultiExport() {
+    const body = document.getElementById('multiexport-body');
+    body.innerHTML = '';
+
+    const ids = Object.keys(tabs);
+
+    // Select all / none row
+    const selRow = document.createElement('div');
+    selRow.className = 'multiexport-select-row';
+    const selAll = document.createElement('button');
+    selAll.className = 'multiexport-select-btn';
+    selAll.textContent = 'Select all';
+    const selNone = document.createElement('button');
+    selNone.className = 'multiexport-select-btn';
+    selNone.textContent = 'Select none';
+    selRow.appendChild(selAll);
+    selRow.appendChild(selNone);
+    body.appendChild(selRow);
+
+    ids.forEach(id => {
+      const tab = tabs[id];
+      const row = document.createElement('label');
+      row.className = 'multiexport-tab-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.dataset.id = id;
+      const lbl = document.createElement('span');
+      lbl.className = 'multiexport-tab-label';
+      lbl.textContent = tab.name + '.txt';
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      body.appendChild(row);
+    });
+
+    selAll.addEventListener('click', () => body.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = true));
+    selNone.addEventListener('click', () => body.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false));
+
+    document.getElementById('multiexport-overlay').classList.add('open');
+  }
+
+  document.getElementById('btn-export').addEventListener('click', openMultiExport);
+
+  document.getElementById('multiexport-do').addEventListener('click', () => {
+    const checked = document.getElementById('multiexport-body').querySelectorAll('input[type=checkbox]:checked');
+    checked.forEach(cb => exportTab(cb.dataset.id));
+    document.getElementById('multiexport-overlay').classList.remove('open');
+  });
+  document.getElementById('multiexport-close').addEventListener('click', () => document.getElementById('multiexport-overlay').classList.remove('open'));
+  document.getElementById('multiexport-cancel').addEventListener('click', () => document.getElementById('multiexport-overlay').classList.remove('open'));
+  document.getElementById('multiexport-overlay').addEventListener('click', e => { if (e.target === document.getElementById('multiexport-overlay')) document.getElementById('multiexport-overlay').classList.remove('open'); });
+
+  // ── Import: multiple files → each opens as new tab ──
+  let pendingImportQueue = [];
+  let pendingImportIdx = 0;
+
+  function showNextImport() {
+    if (pendingImportIdx >= pendingImportQueue.length) {
+      pendingImportQueue = [];
+      pendingImportIdx = 0;
+      document.getElementById('import-overlay').classList.remove('open');
+      return;
+    }
+    const item = pendingImportQueue[pendingImportIdx];
+    document.getElementById('import-filename').textContent = item.filename;
+    // If multiple files, hide "override" option — just open all as new tabs
+    const overrideBtn = document.getElementById('import-override');
+    overrideBtn.style.display = pendingImportQueue.length > 1 ? 'none' : '';
+    document.getElementById('import-overlay').classList.add('open');
+  }
+
+  document.getElementById('btn-import').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.txt'; input.multiple = true;
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files);
+      if (!files.length) return;
+      pendingImportQueue = [];
+      pendingImportIdx = 0;
+      let loaded = 0;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          pendingImportQueue.push({ filename: file.name, name: file.name.replace(/\.txt$/i, ''), content: e.target.result });
+          loaded++;
+          if (loaded === files.length) {
+            // Sort by original file order
+            pendingImportQueue.sort((a, b) => files.findIndex(f => f.name === a.filename) - files.findIndex(f => f.name === b.filename));
+            showNextImport();
+          }
+        };
+        reader.readAsText(file);
+      });
+    });
+    input.click();
+  });
+
+  document.getElementById('import-new-tab').addEventListener('click', () => {
+    if (pendingImportIdx < pendingImportQueue.length) {
+      const item = pendingImportQueue[pendingImportIdx];
+      createTab(item.name, item.content);
+      saveSession();
+      pendingImportIdx++;
+      showNextImport();
+    }
+  });
+
+  document.getElementById('import-override').addEventListener('click', () => {
+    if (pendingImportIdx < pendingImportQueue.length) {
+      const item = pendingImportQueue[pendingImportIdx];
+      const tab = tabs[activeTabId];
+      if (tab) {
+        tab.model.setValue(item.content);
+        tab.name = item.name;
+        const tabEl = tabsList.querySelector(`[data-id="${activeTabId}"]`);
+        if (tabEl) tabEl.querySelector('.tab-name').textContent = item.name;
+        editor.setPosition({ lineNumber: 1, column: 1 });
+        editor.focus();
+        saveSession();
+      }
+      pendingImportIdx++;
+      showNextImport();
+    }
+  });
+
+  document.getElementById('import-close').addEventListener('click', () => {
+    pendingImportQueue = [];
+    pendingImportIdx = 0;
+    document.getElementById('import-overlay').classList.remove('open');
+  });
+
+  document.getElementById('import-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('import-overlay')) {
+      pendingImportQueue = [];
+      pendingImportIdx = 0;
+      document.getElementById('import-overlay').classList.remove('open');
+    }
+  });
+
+  // ── Drag & drop .txt files anywhere -> each opens as a new tab ──
+  // Guarded by dataTransfer.types so it doesn't interfere with tab drag-reorder,
+  // which uses text/plain data rather than real files.
+  window.addEventListener('dragover', (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+  window.addEventListener('drop', (e) => {
+    if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes('Files')) return;
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files).filter(f => /\.txt$/i.test(f.name));
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        createTab(file.name.replace(/\.txt$/i, ''), ev.target.result);
+        saveSession();
+      };
+      reader.readAsText(file);
+    });
+  });
+
+  // ── Docs modal ──
+  (function initDocs() {
+    const overlay  = document.getElementById('docs-overlay');
+    const sidebar  = document.getElementById('docs-sidebar');
+    const content  = document.getElementById('docs-content');
+    let activeBtn  = null;
+
+    function typeColor(type) {
+      if (type === 'number')  return '#61afef';
+      if (type === 'uid')     return '#c678dd';
+      if (type === 'enum')    return '#e5c07b';
+      if (type === 'string')  return '#98c379';
+      if (type === 'command') return '#e06c75';
+      return '#abb2bf';
+    }
+
+    function renderParamsTable(params) {
+      if (!params.length) return '<p class="docs-no-params">No parameters.</p>';
+      let rows = params.map(p => {
+        let extra = '';
+        if (p.type === 'enum') {
+          const preview = p.values.length > 12
+            ? p.values.slice(0, 12).join(', ') + ` … (+${p.values.length - 12} more)`
+            : p.values.join(', ');
+          extra = `<div class="docs-param-enum">${preview}</div>`;
+        }
+        if (p.type === 'uid') extra = `<div class="docs-param-enum">UUID, %variable, or just %</div>`;
+        const defStr = p.default !== undefined ? ` <span style="color:#4a4a4a">(default: ${p.default})</span>` : '';
+        return `<tr><td>${p.name}${defStr}</td><td style="color:${typeColor(p.type)}">${p.type}</td><td>${extra}</td></tr>`;
+      }).join('');
+      return `<table class="docs-params-table"><thead><tr><th>parameter</th><th>type</th><th>values</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderCmd(name, spec) {
+      let html = `<div class="docs-cmd-name">${name}</div><div class="docs-cmd-doc">${spec.doc}</div>`;
+      if (spec.subtypes) {
+        html += `<div class="docs-section-title">subtypes</div><div>`;
+        for (const [subName, sub] of Object.entries(spec.subtypes)) {
+          const allParams = [...spec.params, ...(sub.params || [])];
+          html += `<div class="docs-subtype-block"><div class="docs-subtype-name">${name} ${subName}</div><div class="docs-subtype-doc">${sub.doc}</div>${renderParamsTable(allParams)}</div>`;
+        }
+        html += `</div>`;
+      } else {
+        html += `<div class="docs-section-title">parameters</div>${renderParamsTable(spec.params)}`;
+      }
+      if (spec.example) html += `<div class="docs-section-title">example</div><div class="docs-example">${spec.example}</div>`;
+      content.innerHTML = html;
+    }
+
+    Object.keys(CMDS).forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'docs-cmd-btn';
+      btn.textContent = name;
+      btn.addEventListener('click', () => {
+        if (activeBtn) activeBtn.classList.remove('active');
+        activeBtn = btn; btn.classList.add('active');
+        renderCmd(name, CMDS[name]);
+      });
+      sidebar.appendChild(btn);
+    });
+
+    document.getElementById('btn-docs').addEventListener('click', () => {
+      overlay.classList.add('open');
+      if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
+    });
+    document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  })();
+
+  // ── Tips modal ──
+  (function initTips() {
+    const overlay  = document.getElementById('tips-overlay');
+    const sidebar  = document.getElementById('tips-sidebar');
+    const content  = document.getElementById('tips-content');
+    let activeBtn  = null;
+    let exampleEditor = null;
+
+    function disposeExampleEditor() {
+      if (exampleEditor) { exampleEditor.dispose(); exampleEditor = null; }
+    }
+
+    function renderTip(tip) {
+      disposeExampleEditor();
+
+      let html = `<div class="docs-cmd-name">${tip.title}</div>`;
+
+      const metaParts = [];
+      if (tip.author) metaParts.push(`by ${tip.author}`);
+      if (tip.credit) metaParts.push(`Credit: ${tip.credit}`);
+      if (metaParts.length) html += `<div class="tip-meta">${metaParts.join(' &middot; ')}</div>`;
+
+      if (tip.category) html += `<div class="docs-section-title">${tip.category}</div>`;
+
+      const paragraphs = tip.body.split(/\n\s*\n/);
+      html += paragraphs.map(p => `<div class="tip-para">${linkifyText(p)}</div>`).join('');
+
+      const videos = tip.video ? (Array.isArray(tip.video) ? tip.video : [tip.video]) : [];
+      html += videos.map((src, i) => `
+        <div class="tip-video-box" id="tip-video-box-${i}">
+          <video controls preload="metadata" id="tip-video-${i}" src="${escapeHtml(src)}"></video>
+          <div class="tip-video-toolbar">
+            <span class="tip-video-path" id="tip-video-path-${i}" title="${escapeHtml(src)}">${escapeHtml(src)}</span>
+          </div>
+        </div>`).join('');
+
+      const hasExample = !!(tip.exampleFile || tip.example);
+
+      if (hasExample) {
+        html += `<div class="docs-section-title" style="margin-top:4px;">example</div>
+          <div class="tip-example-box">
+            <div class="tip-example-mount" id="tip-example-mount"></div>
+            <div class="tip-example-toolbar">
+              <span class="tip-example-status" id="tip-example-status"></span>
+              <button class="tip-example-btn" id="tip-example-toggle" style="display:none;">&#9662; Show more</button>
+              <button class="tip-example-btn primary" id="tip-example-open" style="display:none;">&#8599; Open in Editor</button>
+            </div>
+          </div>`;
+      }
+
+      content.innerHTML = html;
+
+      videos.forEach((src, i) => {
+        const videoEl = document.getElementById(`tip-video-${i}`);
+        const pathLabel = document.getElementById(`tip-video-path-${i}`);
+        if (!videoEl) return;
+
+        videoEl.addEventListener('error', () => {
+          if (pathLabel) {
+            pathLabel.textContent = `Couldn't load "${src}" — check the path is correct.`;
+            pathLabel.classList.add('tip-video-error');
+          }
+        });
+      });
+
+      if (hasExample) {
+        const mount = document.getElementById('tip-example-mount');
+        const statusEl = document.getElementById('tip-example-status');
+        const toggleBtn = document.getElementById('tip-example-toggle');
+        const openBtn = document.getElementById('tip-example-open');
+        let toggleHandler = null;
+        let openHandler = null;
+
+        mount.addEventListener('transitionend', (e) => {
+          if (e.propertyName === 'height' && exampleEditor) exampleEditor.layout();
+        });
+
+        function mountExampleEditor(rawText, alreadyFormatted) {
+          disposeExampleEditor();
+          const formatted = alreadyFormatted ? rawText : formatCommandText(rawText);
+
+          const lineHeight = 19;
+          const linePad = 10;
+          const lineCount = formatted.split('\n').length;
+          const collapsedHeight = lineHeight + linePad;
+          const naturalHeight = lineCount * lineHeight + linePad;
+          const expandedHeight = Math.min(naturalHeight, 220);
+          let isExpanded = false;
+
+          mount.style.height = collapsedHeight + 'px';
+
+          exampleEditor = monaco.editor.create(mount, {
+            value: formatted, language: LANG, theme: 'cmdDark',
+            readOnly: true, domReadOnly: true, contextmenu: false,
+            minimap: { enabled: false }, scrollBeyondLastLine: false,
+            lineNumbers: 'on', fontSize: 13, wordWrap: 'off',
+            renderLineHighlight: 'none', overviewRulerLanes: 0,
+            folding: false, glyphMargin: false,
+            scrollbar: { alwaysConsumeMouseWheel: false },
+            automaticLayout: true,
+          });
+
+          if (naturalHeight <= collapsedHeight + 1) {
+            toggleBtn.style.display = 'none';
+          } else {
+            toggleBtn.style.display = '';
+            toggleBtn.innerHTML = '&#9662; Show more';
+            if (toggleHandler) toggleBtn.removeEventListener('click', toggleHandler);
+            toggleHandler = () => {
+              isExpanded = !isExpanded;
+              const targetHeight = isExpanded ? expandedHeight : collapsedHeight;
+              mount.style.height = targetHeight + 'px';
+              toggleBtn.innerHTML = isExpanded ? '&#9652; Show less' : '&#9662; Show more';
+              // Force an immediate relayout at the target size rather than waiting on
+              // the CSS transition (which would otherwise get a stale, mid-animation size).
+              if (exampleEditor) exampleEditor.layout({ width: mount.clientWidth, height: targetHeight });
+            };
+            toggleBtn.addEventListener('click', toggleHandler);
+          }
+
+          openBtn.style.display = '';
+          if (openHandler) openBtn.removeEventListener('click', openHandler);
+          openHandler = () => {
+            createTab(tip.title, formatted);
+            overlay.classList.remove('open');
+          };
+          openBtn.addEventListener('click', openHandler);
+        }
+
+        if (tip.exampleFile) {
+          if (statusEl) statusEl.textContent = `Loading ${tip.exampleFile}…`;
+          fetch(tip.exampleFile)
+            .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
+            .then(text => {
+              if (statusEl) { statusEl.textContent = ''; statusEl.classList.remove('tip-example-error'); }
+              mountExampleEditor(text, true);
+            })
+            .catch(() => {
+              if (statusEl) {
+                statusEl.textContent = `Couldn't load "${tip.exampleFile}" — check the path is correct.`;
+                statusEl.classList.add('tip-example-error');
+              }
+            });
+        } else if (tip.example) {
+          mountExampleEditor(tip.example);
+        }
+      }
+    }
+
+    let lastCategory = null;
+    TIPS.forEach(tip => {
+      if (tip.category && tip.category !== lastCategory) {
+        const catEl = document.createElement('div');
+        catEl.className = 'tips-cat-header';
+        catEl.textContent = tip.category;
+        sidebar.appendChild(catEl);
+        lastCategory = tip.category;
+      }
+      const btn = document.createElement('button');
+      btn.className = 'docs-cmd-btn';
+      btn.textContent = tip.title;
+      btn.addEventListener('click', () => {
+        if (activeBtn) activeBtn.classList.remove('active');
+        activeBtn = btn; btn.classList.add('active');
+        renderTip(tip);
+      });
+      sidebar.appendChild(btn);
+    });
+
+    document.getElementById('btn-tips').addEventListener('click', () => {
+      overlay.classList.add('open');
+      if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
+    });
+    document.getElementById('tips-close').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  })();
+
+  // ── Outline panel (/// regions + // comments) ──
+  // Building a region: start a line with `/// Some Title` (must have text after the
+  // slashes). Close it with a line containing only `///` (nothing after). Regions can
+  // nest; an unclosed region just stays open through the rest of the file. Ordinary
+  // `//` comments show up too, filed under whichever region they're inside (or at the
+  // top level if there's no enclosing region).
+  function computeOutline(model) {
+    const lines = model.getLinesContent();
+    const root = { children: [] };
+    const stack = [root];
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      const regionMatch = trimmed.match(/^\/\/\/\s*(.*)$/);
+      if (regionMatch) {
+        const title = regionMatch[1].trim();
+        if (title) {
+          const node = { type: 'region', title, line: i + 1, children: [] };
+          stack[stack.length - 1].children.push(node);
+          stack.push(node);
+        } else if (stack.length > 1) {
+          stack.pop();
+        }
+        continue;
+      }
+      if (trimmed.startsWith('//')) {
+        const text = trimmed.slice(2).trim();
+        if (text) stack[stack.length - 1].children.push({ type: 'comment', text, line: i + 1 });
+      }
+    }
+    return root.children;
+  }
+
+  function renderOutlineNodes(nodes, depth) {
+    return nodes.map(node => {
+      const pad = 8 + depth * 12;
+      if (node.type === 'region') {
+        const btn = `<button class="outline-region-btn" data-line="${node.line}" style="padding-left:${pad}px" title="${escapeHtml(node.title)}">&#9656; ${escapeHtml(node.title)}</button>`;
+        return btn + renderOutlineNodes(node.children, depth + 1);
+      }
+      return `<button class="outline-comment-btn" data-line="${node.line}" style="padding-left:${pad}px" title="${escapeHtml(node.text)}">${escapeHtml(node.text)}</button>`;
+    }).join('');
+  }
+
+  function updateOutline() {
+    const model = editor.getModel();
+    const list = document.getElementById('outline-list');
+    if (!model || !list) return;
+    const nodes = computeOutline(model);
+    if (!nodes.length) {
+      list.innerHTML = '<div class="outline-empty">No regions or comments yet.<br><br>Start a line with <code>/// Title</code> to open a collapsible region, and close it with a line containing just <code>///</code>.</div>';
+      return;
+    }
+    list.innerHTML = renderOutlineNodes(nodes, 0);
+    list.querySelectorAll('button[data-line]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ln = parseInt(btn.dataset.line, 10);
+        editor.setPosition({ lineNumber: ln, column: 1 });
+        editor.trigger('outline', 'editor.unfold', {});
+        editor.revealLineInCenter(ln);
+        editor.focus();
+      });
+    });
+  }
+
+  (function initOutlinePanel() {
+    const handle = document.getElementById('outline-resize');
+    const panel = document.getElementById('outline-panel');
+    const collapseBtn = document.getElementById('outline-collapse');
+    let dragging = false, startX = 0, startWidth = 0;
+
+    handle.addEventListener('mousedown', (e) => {
+      dragging = true; startX = e.clientX; startWidth = panel.getBoundingClientRect().width;
+      handle.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const delta = startX - e.clientX; // handle sits left of the panel, so dragging left grows it
+      const newWidth = Math.max(140, Math.min(480, startWidth + delta));
+      panel.style.width = newWidth + 'px';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.userSelect = '';
+      try { localStorage.setItem('cmdEditor_outlineWidth', panel.style.width); } catch (e) {}
+    });
+
+    function setCollapsed(collapsed) {
+      panel.classList.toggle('collapsed', collapsed);
+      handle.style.display = collapsed ? 'none' : '';
+      collapseBtn.innerHTML = collapsed ? '&#8249;' : '&#8250;';
+      collapseBtn.title = collapsed ? 'Show outline' : 'Collapse outline';
+      try { localStorage.setItem('cmdEditor_outlineCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+    }
+    collapseBtn.addEventListener('click', () => setCollapsed(!panel.classList.contains('collapsed')));
+
+    try {
+      const savedWidth = localStorage.getItem('cmdEditor_outlineWidth');
+      if (savedWidth) panel.style.width = savedWidth;
+      setCollapsed(localStorage.getItem('cmdEditor_outlineCollapsed') === '1');
+    } catch (e) {}
+  })();
+
+  // ── Tips window: draggable + resizable floating panel instead of a blocking modal ──
+  (function initTipsWindow() {
+    const overlay = document.getElementById('tips-overlay');
+    const box = overlay.querySelector('.modal-box');
+    const header = overlay.querySelector('.modal-header');
+    let dragging = false, offsetX = 0, offsetY = 0;
+
+    function saveState() {
+      if (!overlay.classList.contains('open')) return;
+      try {
+        localStorage.setItem('cmdEditor_tipsWindow', JSON.stringify({
+          left: box.style.left, top: box.style.top,
+          width: box.offsetWidth + 'px', height: box.offsetHeight + 'px',
+        }));
+      } catch (e) {}
+    }
+
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.modal-close')) return;
+      dragging = true;
+      const rect = box.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      document.body.style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const x = Math.max(0, Math.min(window.innerWidth - 80, e.clientX - offsetX));
+      const y = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offsetY));
+      box.style.left = x + 'px';
+      box.style.top = y + 'px';
+      box.style.transform = 'none';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.userSelect = '';
+      saveState();
+    });
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => saveState()).observe(box);
+    }
+
+    try {
+      const raw = localStorage.getItem('cmdEditor_tipsWindow');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.left) { box.style.left = s.left; box.style.transform = 'none'; }
+        if (s.top) box.style.top = s.top;
+        if (s.width) box.style.width = s.width;
+        if (s.height) box.style.height = s.height;
+      }
+    } catch (e) {}
+  })();
+
+  // ── Snippets ──
+  const SNIPPETS_KEY = 'cmdEditor_snippets';
+
+  function loadSnippets() {
+    try { return JSON.parse(localStorage.getItem(SNIPPETS_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function saveSnippetsList(list) {
+    try { localStorage.setItem(SNIPPETS_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function makeSnippetId() {
+    return 'snip_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
+  let pendingSnippetText = null;
+
+  function openSaveSnippetDialog(text) {
+    pendingSnippetText = text;
+    const input = document.getElementById('save-snippet-name');
+    input.value = '';
+    document.getElementById('save-snippet-overlay').classList.add('open');
+    setTimeout(() => input.focus(), 0);
+  }
+  function closeSaveSnippetDialog() {
+    pendingSnippetText = null;
+    document.getElementById('save-snippet-overlay').classList.remove('open');
+  }
+
+  document.getElementById('save-snippet-confirm').addEventListener('click', () => {
+    const name = document.getElementById('save-snippet-name').value.trim();
+    if (!name || pendingSnippetText === null) return;
+    const list = loadSnippets();
+    list.push({ id: makeSnippetId(), name, content: pendingSnippetText, createdAt: Date.now() });
+    saveSnippetsList(list);
+    closeSaveSnippetDialog();
+    renderSnippetsList();
+  });
+  document.getElementById('save-snippet-cancel').addEventListener('click', closeSaveSnippetDialog);
+  document.getElementById('save-snippet-cancel-x').addEventListener('click', closeSaveSnippetDialog);
+  document.getElementById('save-snippet-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('save-snippet-confirm').click(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeSaveSnippetDialog(); }
+  });
+  document.getElementById('save-snippet-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('save-snippet-overlay')) closeSaveSnippetDialog();
+  });
+
+  function downloadSnippet(snip) {
+    const blob = new Blob([snip.content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = snip.name + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function renderSnippetsList() {
+    const list = loadSnippets();
+    const container = document.getElementById('snippets-list');
+    if (!list.length) {
+      container.innerHTML = '<div id="snippets-empty">No saved snippets yet. Select some lines in the editor, right-click, and choose "Save Snippet".</div>';
+      return;
+    }
+    container.innerHTML = list.map(s => `
+      <div class="snippet-row" data-id="${s.id}">
+        <span class="snippet-name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
+        <button class="snippet-btn primary" data-action="paste">Paste in current window</button>
+        <button class="snippet-btn" data-action="export">Export</button>
+        <button class="snippet-btn danger" data-action="delete">Delete</button>
+      </div>`).join('');
+
+    container.querySelectorAll('.snippet-row').forEach(row => {
+      const id = row.dataset.id;
+      row.querySelector('[data-action="paste"]').addEventListener('click', () => {
+        const snip = loadSnippets().find(s => s.id === id);
+        if (!snip) return;
+        const sel = editor.getSelection();
+        editor.executeEdits('paste-snippet', [{ range: sel, text: snip.content }]);
+        editor.focus();
+      });
+      row.querySelector('[data-action="export"]').addEventListener('click', () => {
+        const snip = loadSnippets().find(s => s.id === id);
+        if (snip) downloadSnippet(snip);
+      });
+      row.querySelector('[data-action="delete"]').addEventListener('click', () => {
+        saveSnippetsList(loadSnippets().filter(s => s.id !== id));
+        renderSnippetsList();
+      });
+    });
+  }
+
+  document.getElementById('btn-snippets').addEventListener('click', () => {
+    renderSnippetsList();
+    document.getElementById('snippets-overlay').classList.add('open');
+  });
+  document.getElementById('snippets-close').addEventListener('click', () => document.getElementById('snippets-overlay').classList.remove('open'));
+  document.getElementById('snippets-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('snippets-overlay')) document.getElementById('snippets-overlay').classList.remove('open');
+  });
+
+  document.getElementById('snippets-export-all').addEventListener('click', () => {
+    loadSnippets().forEach(downloadSnippet);
+  });
+
+  document.getElementById('snippets-import').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.txt'; input.multiple = true;
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files);
+      if (!files.length) return;
+      const list = loadSnippets();
+      let loaded = 0;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          list.push({ id: makeSnippetId(), name: file.name.replace(/\.txt$/i, ''), content: e.target.result, createdAt: Date.now() });
+          loaded++;
+          if (loaded === files.length) { saveSnippetsList(list); renderSnippetsList(); }
+        };
+        reader.readAsText(file);
+      });
+    });
+    input.click();
+  });
+
+  // ── Session persistence via localStorage ──
+  const STORAGE_KEY = 'cmdEditor_session';
+
+  function saveSession() {
+    try {
+      // Read order from DOM so drag-reordered tabs are saved correctly
+      const tabOrder = Array.from(tabsList.querySelectorAll('.tab')).map(el => el.dataset.id);
+      const session = {
+        activeTabId,
+        tabOrder,
+        tabs: Object.fromEntries(
+          Object.entries(tabs).map(([id, tab]) => [id, { name: tab.name, content: tab.model.getValue() }])
+        ),
+        tabCounter,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    } catch (e) { /* storage full or unavailable */ }
+  }
+
+  function restoreTab(id, name, content) {
+    const model = monaco.editor.createModel(content || '', LANG);
+    tabs[id] = { name, model, viewState: null };
+
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.id = id;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tab-name';
+    nameEl.textContent = name;
+    nameEl.title = 'Double-click to rename';
+
+    const closeEl = document.createElement('span');
+    closeEl.className = 'tab-close';
+    closeEl.innerHTML = '&#x2715;';
+    closeEl.title = 'Close tab';
+
+    tabEl.appendChild(nameEl);
+    tabEl.appendChild(closeEl);
+    tabsList.appendChild(tabEl);
+
+    tabEl.addEventListener('click', (e) => { if (e.target === closeEl) return; switchTab(id); });
+    nameEl.addEventListener('dblclick', () => startRename(id, tabEl, nameEl));
+    closeEl.addEventListener('click', () => closeTab(id));
+    attachDragHandlers(tabEl);
+
+    model.onDidChangeContent(() => {
+      clearTimeout(tabs[id].debounce);
+      tabs[id].debounce = setTimeout(() => {
+        if (activeTabId === id) { validate(model, editor); updateOutline(); }
+        saveSession();
+      }, 250);
+    });
+  }
+
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const session = JSON.parse(raw);
+      if (!session.tabs || !session.tabOrder || !session.tabOrder.length) return false;
+
+      tabCounter = session.tabCounter || 0;
+
+      session.tabOrder.forEach(id => {
+        const saved = session.tabs[id];
+        if (saved) restoreTab(id, saved.name, saved.content);
+      });
+
+      const restoreId = session.activeTabId && tabs[session.activeTabId]
+        ? session.activeTabId
+        : session.tabOrder[session.tabOrder.length - 1];
+      switchTab(restoreId);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // ── Boot: restore session or start fresh ──
+  if (!loadSession()) {
+    createTab('commands1', 'create 1 part 1 1 1');
+  }
+});
+</script>
+</body>
+</html>
