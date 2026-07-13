@@ -10,6 +10,7 @@ const CHANGELOG = [
     version: "Power Tools",
     date: "13/07/2026",
     changes: [
+      { type: "new", text: "Tween viewer: plays your script's motion on a canvas — parts move, resize, recolour and explode exactly when the wait timing says they would. Scrub, change speed, switch camera planes (top/front/side), and follow motion trails." },
       { type: "new", text: "Execution timeline: see every command plotted at the moment it runs (built from wait durations), and click any entry to jump to its line." },
       { type: "new", text: "F2 renames a %variable everywhere in the tab. Putting the cursor on a %variable or UID highlights all its uses, and Shift+F12 lists them." },
       { type: "new", text: "Search all tabs at once with Ctrl+Shift+F — results are grouped per tab and clicking one jumps straight there." },
@@ -518,6 +519,34 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 /* Save-snippet naming dialog */
 #save-snippet-overlay .modal-box { width: 340px; }
 
+/* ── Tween viewer ── */
+#tween-summary { color: #666; font-size: 11px; margin-left: 6px; }
+#tween-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-bottom: 1px solid #333; flex-shrink: 0;
+  font-family: Consolas, monospace;
+}
+.tv-btn {
+  background: #252525; border: 1px solid #444; color: #abb2bf; border-radius: 3px;
+  font-family: Consolas, monospace; font-size: 12px; padding: 3px 10px; cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.tv-btn:hover { background: #2e2e2e; border-color: #61afef; color: #61afef; }
+#tv-scrub { flex: 1; accent-color: #61afef; cursor: pointer; min-width: 80px; }
+#tv-time { color: #888; font-size: 11px; min-width: 110px; text-align: center; }
+.tv-check {
+  color: #888; font-size: 11px; display: flex; align-items: center; gap: 4px;
+  cursor: pointer; user-select: none;
+}
+.tv-check input { accent-color: #61afef; cursor: pointer; }
+#tween-hint {
+  padding: 4px 14px; color: #4a4a4a; font-size: 10px;
+  font-family: Consolas, monospace; border-bottom: 1px solid #222; flex-shrink: 0;
+}
+#tween-canvas-wrap { flex: 1; min-height: 0; position: relative; background: #141414; }
+#tween-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+#tween-canvas.panning { cursor: grabbing; }
+
 /* ── Timeline ── */
 #timeline-summary { color: #666; font-size: 11px; margin-left: auto; padding-right: 8px; }
 #timeline-body { flex: 1; overflow-y: auto; padding: 12px 16px; font-family: Consolas, monospace; }
@@ -618,6 +647,7 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <span class="bar-sep"></span>
       <button class="bar-btn" id="btn-search" title="Search all tabs (Ctrl+Shift+F)">Search</button>
       <button class="bar-btn" id="btn-timeline" title="Execution timeline">Timeline</button>
+      <button class="bar-btn" id="btn-tweenview" title="Animated tween preview">Tweens</button>
       <button class="bar-btn" id="btn-compare" title="Compare two tabs">Compare</button>
       <span class="bar-sep"></span>
       <button class="bar-btn" id="btn-docs">Commands</button>
@@ -774,6 +804,40 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
         <button class="close-warn-btn" id="save-snippet-cancel">Cancel</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Tween viewer modal -->
+<div id="tween-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:90vw; height:84vh;">
+    <div class="modal-header">
+      <span class="modal-title">Tween viewer</span>
+      <span id="tween-summary"></span>
+      <button class="modal-close" id="tween-close" style="margin-left:auto;">&#x2715;</button>
+    </div>
+    <div id="tween-toolbar">
+      <button class="tv-btn" id="tv-play" title="Play / pause (Space)">&#9654;</button>
+      <button class="tv-btn" id="tv-restart" title="Back to start">&#8676;</button>
+      <input type="range" id="tv-scrub" min="0" max="1" step="0.01" value="0">
+      <span id="tv-time">0.00s / 0.00s</span>
+      <select id="tv-speed" class="compare-select" title="Playback speed">
+        <option value="0.25">0.25&times;</option>
+        <option value="0.5">0.5&times;</option>
+        <option value="1" selected>1&times;</option>
+        <option value="2">2&times;</option>
+        <option value="4">4&times;</option>
+      </select>
+      <select id="tv-view" class="compare-select" title="Camera plane">
+        <option value="top" selected>Top (X/Z)</option>
+        <option value="front">Front (X/Y)</option>
+        <option value="side">Side (Z/Y)</option>
+      </select>
+      <label class="tv-check"><input type="checkbox" id="tv-trails" checked> trails</label>
+      <label class="tv-check"><input type="checkbox" id="tv-labels" checked> labels</label>
+      <button class="tv-btn" id="tv-fit" title="Fit everything in view">Fit</button>
+    </div>
+    <div id="tween-hint">Objects appear where their first command places them &middot; preview uses linear easing &middot; drag to pan, scroll to zoom</div>
+    <div id="tween-canvas-wrap"><canvas id="tween-canvas"></canvas></div>
   </div>
 </div>
 
@@ -1135,6 +1199,12 @@ require(['vs/editor/editor.main'], function () {
       category: `Editor`,
       body: `Lines using the color command (and trigger color) show a small colour swatch next to the RGB values — click it to open a visual colour picker that rewrites the numbers for you.\n\nPress Ctrl+/ to comment or uncomment the selected lines.\n\nYou can also drag .txt files straight onto the editor window — each one opens in its own new tab.`,
       example: `color 1 %myPart 255 128 0`,
+    },
+    {
+      title: `Tween viewer`,
+      category: `Editor`,
+      body: `The Tweens button plays your script's motion on a 2D canvas so you can check choreography before running it in game. It compiles the active tab into keyframes using your wait timing: parts appear on create/spawn, glide on tween, jump on move, and resize/recolour when those commands fire. Explosions flash as expanding rings.\n\nScrub the bar or press Space to play/pause, change the speed, and switch between Top (X/Z), Front (X/Y) and Side (Z/Y) camera planes. Trails show each object's route through the scene. Drag to pan, scroll to zoom, Fit to frame everything.\n\nSince the game assigns real UIDs at runtime, objects the script only ever tweens appear where their first command places them — the preview is about relative motion and timing, not exact scene layout.`,
+      example: `create 1 part 0 0 0\nwait 1\ntween 1 %gate 3 0 10 0 0 90 0\nwait 2\nexplosion 8 50 0 0 0 None`,
     },
     {
       title: `Variable tools`,
@@ -2279,6 +2349,330 @@ require(['vs/editor/editor.main'], function () {
   document.getElementById('btn-timeline').addEventListener('click', () => { buildTimeline(); timelineOverlay.classList.add('open'); });
   document.getElementById('timeline-close').addEventListener('click', () => timelineOverlay.classList.remove('open'));
   timelineOverlay.addEventListener('click', (e) => { if (e.target === timelineOverlay) timelineOverlay.classList.remove('open'); });
+
+  // ── Tween viewer ──
+  // Compiles the active tab into per-object keyframes (using the same wait
+  // timing as the timeline) and plays them back on a canvas. Pure preview —
+  // it never touches the script or how commands are validated.
+  const tweenOverlay = document.getElementById('tween-overlay');
+  const tvCanvas = document.getElementById('tween-canvas');
+  const tvCtx = tvCanvas.getContext('2d');
+  const tv = {
+    open: false, playing: false, time: 0, duration: 0, speed: 1,
+    view: 'top', trails: true, labels: true,
+    scale: 6, panX: 0, panY: 0, lastFrame: 0,
+    scene: { objects: [], explosions: [] },
+  };
+
+  function tvHue(key) {
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    return h % 360;
+  }
+  function tvLabelFor(value) {
+    return UUID_RE.test(value) ? value.slice(0, 8) + '\u2026' : value;
+  }
+
+  function tvCompile() {
+    const model = editor.getModel();
+    const objects = new Map(); // key -> { key, label, hue, events: [] }
+    const explosions = [];
+    if (!model) return { objects: [], explosions, duration: 0 };
+    const num = (tok) => { const n = Number(tok && tok.value); return isNaN(n) ? null : n; };
+    const vec = (tokens, i) => {
+      const x = num(tokens[i]), y = num(tokens[i + 1]), z = num(tokens[i + 2]);
+      return (x === null || y === null || z === null) ? null : [x, y, z];
+    };
+    const getObj = (key, label) => {
+      if (!objects.has(key)) objects.set(key, { key, label, hue: tvHue(key), events: [] });
+      return objects.get(key);
+    };
+    let t = 0, duration = 0;
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const tokens = parseLine(model.getLineContent(ln));
+      if (!tokens.length) continue;
+      const cmd = tokens[0].value.toLowerCase();
+      if (!CMDS[cmd]) continue;
+      switch (cmd) {
+        case 'wait': { const n = num(tokens[1]); if (n !== null) t += n; break; }
+        case 'create': { // create world type x y z
+          const p = vec(tokens, 3);
+          if (p) getObj('#create@' + ln, tokens[2] ? tokens[2].value : 'part').events.push({ t, type: 'spawn', pos: p });
+          break;
+        }
+        case 'spawn': { // spawn world propName x y z rx ry rz
+          const p = vec(tokens, 3), r = vec(tokens, 6) || [0, 0, 0];
+          if (p) getObj('#spawn@' + ln, tokens[2] ? tokens[2].value : 'prop').events.push({ t, type: 'spawn', pos: p, rot: r });
+          break;
+        }
+        case 'move': { // move world pUID x y z rx ry rz
+          const uid = tokens[2] && tokens[2].value;
+          const p = vec(tokens, 3), r = vec(tokens, 6) || [0, 0, 0];
+          if (uid && isValidUID(uid) && p) getObj(uid, tvLabelFor(uid)).events.push({ t, type: 'move', pos: p, rot: r });
+          break;
+        }
+        case 'tween': { // tween world pUID duration x y z rx ry rz
+          const uid = tokens[2] && tokens[2].value;
+          const dur = num(tokens[3]);
+          const p = vec(tokens, 4), r = vec(tokens, 7) || [0, 0, 0];
+          if (uid && isValidUID(uid) && p && dur !== null) {
+            getObj(uid, tvLabelFor(uid)).events.push({ t, type: 'tween', dur: Math.max(0, dur), pos: p, rot: r });
+            duration = Math.max(duration, t + Math.max(0, dur));
+          }
+          break;
+        }
+        case 'size': { // size world pUID sx sy sz
+          const uid = tokens[2] && tokens[2].value;
+          const s = vec(tokens, 3);
+          if (uid && isValidUID(uid) && s) getObj(uid, tvLabelFor(uid)).events.push({ t, type: 'size', size: s });
+          break;
+        }
+        case 'color': { // color world pUID r g b
+          const uid = tokens[2] && tokens[2].value;
+          const c = vec(tokens, 3);
+          if (uid && isValidUID(uid) && c) getObj(uid, tvLabelFor(uid)).events.push({ t, type: 'color', color: c });
+          break;
+        }
+        case 'explosion': { // explosion radius damage x y z target
+          const radius = num(tokens[1]), p = vec(tokens, 3);
+          if (radius !== null && p) { explosions.push({ t, radius, pos: p }); duration = Math.max(duration, t + 0.6); }
+          break;
+        }
+      }
+    }
+    duration = Math.max(duration, t);
+    return { objects: [...objects.values()], explosions, duration };
+  }
+
+  // State of one object at time T. Objects with no positional event stay hidden.
+  function tvStateAt(obj, T) {
+    let pos = null, rot = [0, 0, 0], size = [4, 1, 2], color = [163, 163, 163];
+    for (const ev of obj.events) {
+      if (ev.t > T) break;
+      if (ev.type === 'spawn' || ev.type === 'move') { pos = ev.pos; rot = ev.rot || rot; }
+      else if (ev.type === 'tween') {
+        if (pos === null || ev.dur === 0 || T >= ev.t + ev.dur) { pos = ev.pos; rot = ev.rot; }
+        else {
+          const k = (T - ev.t) / ev.dur;
+          pos = pos.map((v, i) => v + (ev.pos[i] - v) * k);
+          rot = rot.map((v, i) => v + (ev.rot[i] - v) * k);
+        }
+      }
+      else if (ev.type === 'size') size = ev.size;
+      else if (ev.type === 'color') color = ev.color;
+    }
+    return pos === null ? null : { pos, rot, size, color };
+  }
+
+  // World axes per camera plane: [horizontal index, vertical index, flipV, rotation index, sizeH, sizeV]
+  function tvAxes() {
+    if (tv.view === 'front') return { h: 0, v: 1, flip: -1, rot: 2, sh: 0, sv: 1 };
+    if (tv.view === 'side')  return { h: 2, v: 1, flip: -1, rot: 0, sh: 2, sv: 1 };
+    return { h: 0, v: 2, flip: 1, rot: 1, sh: 0, sv: 2 }; // top
+  }
+  function tvToScreen(p, w, hgt) {
+    const a = tvAxes();
+    return [w / 2 + tv.panX + p[a.h] * tv.scale, hgt / 2 + tv.panY + p[a.v] * tv.scale * a.flip];
+  }
+
+  function tvFit() {
+    const a = tvAxes();
+    let min = [Infinity, Infinity], max = [-Infinity, -Infinity];
+    const add = (p) => {
+      min[0] = Math.min(min[0], p[a.h]); max[0] = Math.max(max[0], p[a.h]);
+      min[1] = Math.min(min[1], p[a.v]); max[1] = Math.max(max[1], p[a.v]);
+    };
+    tv.scene.objects.forEach(o => o.events.forEach(ev => { if (ev.pos) add(ev.pos); }));
+    tv.scene.explosions.forEach(ex => add(ex.pos));
+    const w = tvCanvas.clientWidth, hgt = tvCanvas.clientHeight;
+    if (min[0] === Infinity) { tv.scale = 6; tv.panX = 0; tv.panY = 0; return; }
+    const spanH = Math.max(4, max[0] - min[0]), spanV = Math.max(4, max[1] - min[1]);
+    tv.scale = Math.min((w * 0.8) / spanH, (hgt * 0.8) / spanV);
+    tv.scale = Math.max(0.5, Math.min(60, tv.scale));
+    tv.panX = -((min[0] + max[0]) / 2) * tv.scale;
+    tv.panY = -((min[1] + max[1]) / 2) * tv.scale * tvAxes().flip;
+  }
+
+  function tvRender() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = tvCanvas.clientWidth, hgt = tvCanvas.clientHeight;
+    if (tvCanvas.width !== w * dpr || tvCanvas.height !== hgt * dpr) {
+      tvCanvas.width = w * dpr; tvCanvas.height = hgt * dpr;
+    }
+    tvCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    tvCtx.clearRect(0, 0, w, hgt);
+    const a = tvAxes();
+
+    // Grid — pick a spacing that lands between 40 and 120 px.
+    let g = 1;
+    while (g * tv.scale < 40) g *= (String(g)[0] === '2' ? 2.5 : 2);
+    while (g * tv.scale > 120) g /= 2;
+    tvCtx.strokeStyle = '#1d1d1d'; tvCtx.lineWidth = 1;
+    const startH = Math.floor((-w / 2 - tv.panX) / (g * tv.scale)) * g;
+    const startV = Math.floor((-hgt / 2 - tv.panY * a.flip) / (g * tv.scale)) * g;
+    tvCtx.beginPath();
+    for (let x = startH; ; x += g) {
+      const sx = w / 2 + tv.panX + x * tv.scale;
+      if (sx > w) break;
+      tvCtx.moveTo(sx, 0); tvCtx.lineTo(sx, hgt);
+    }
+    for (let y = startV; ; y += g) {
+      const sy = hgt / 2 + tv.panY + y * tv.scale * a.flip;
+      if (a.flip === 1 ? sy > hgt : sy < 0) break;
+      tvCtx.moveTo(0, sy); tvCtx.lineTo(w, sy);
+    }
+    tvCtx.stroke();
+    // Origin axes
+    tvCtx.strokeStyle = '#2c2c2c';
+    tvCtx.beginPath();
+    const oz = tvToScreen([0, 0, 0], w, hgt);
+    tvCtx.moveTo(oz[0], 0); tvCtx.lineTo(oz[0], hgt);
+    tvCtx.moveTo(0, oz[1]); tvCtx.lineTo(w, oz[1]);
+    tvCtx.stroke();
+    tvCtx.fillStyle = '#3a3a3a'; tvCtx.font = '10px Consolas, monospace';
+    const axisNames = ['X', 'Y', 'Z'];
+    tvCtx.fillText(axisNames[a.h] + ' \u2192', w - 34, oz[1] - 6);
+    tvCtx.fillText(axisNames[a.v], oz[0] + 6, a.flip === 1 ? hgt - 8 : 14);
+    tvCtx.fillText(g + ' units/square', 10, hgt - 10);
+
+    // Trails
+    if (tv.trails) {
+      tv.scene.objects.forEach(o => {
+        const pts = o.events.filter(ev => ev.pos).map(ev => tvToScreen(ev.pos, w, hgt));
+        if (pts.length < 2) return;
+        tvCtx.strokeStyle = `hsla(${o.hue},70%,60%,0.35)`;
+        tvCtx.lineWidth = 1.5;
+        tvCtx.setLineDash([4, 4]);
+        tvCtx.beginPath();
+        pts.forEach((p, i) => i ? tvCtx.lineTo(p[0], p[1]) : tvCtx.moveTo(p[0], p[1]));
+        tvCtx.stroke();
+        tvCtx.setLineDash([]);
+        pts.forEach(p => { tvCtx.fillStyle = `hsla(${o.hue},70%,60%,0.5)`; tvCtx.fillRect(p[0] - 1.5, p[1] - 1.5, 3, 3); });
+      });
+    }
+
+    // Objects
+    tv.scene.objects.forEach(o => {
+      const st = tvStateAt(o, tv.time);
+      if (!st) return;
+      const [sx, sy] = tvToScreen(st.pos, w, hgt);
+      const rw = Math.max(3, st.size[a.sh] * tv.scale);
+      const rh = Math.max(3, st.size[a.sv] * tv.scale);
+      tvCtx.save();
+      tvCtx.translate(sx, sy);
+      tvCtx.rotate((st.rot[a.rot] || 0) * Math.PI / 180 * (a.flip === 1 ? -1 : 1));
+      tvCtx.fillStyle = `rgba(${st.color[0]},${st.color[1]},${st.color[2]},0.85)`;
+      tvCtx.strokeStyle = `hsl(${o.hue},70%,60%)`;
+      tvCtx.lineWidth = 1.5;
+      tvCtx.fillRect(-rw / 2, -rh / 2, rw, rh);
+      tvCtx.strokeRect(-rw / 2, -rh / 2, rw, rh);
+      tvCtx.restore();
+      if (tv.labels) {
+        tvCtx.fillStyle = `hsl(${o.hue},60%,70%)`;
+        tvCtx.font = '10px Consolas, monospace';
+        tvCtx.textAlign = 'center';
+        tvCtx.fillText(o.label, sx, sy - rh / 2 - 5);
+        tvCtx.textAlign = 'left';
+      }
+    });
+
+    // Explosion flashes (0.6s expanding ring)
+    tv.scene.explosions.forEach(ex => {
+      const dt = tv.time - ex.t;
+      if (dt < 0 || dt > 0.6) return;
+      const k = dt / 0.6;
+      const [sx, sy] = tvToScreen(ex.pos, w, hgt);
+      tvCtx.strokeStyle = `rgba(229,192,123,${1 - k})`;
+      tvCtx.lineWidth = 2.5;
+      tvCtx.beginPath();
+      tvCtx.arc(sx, sy, Math.max(1, ex.radius * tv.scale * k), 0, Math.PI * 2);
+      tvCtx.stroke();
+    });
+  }
+
+  function tvUpdateHud() {
+    document.getElementById('tv-scrub').value = tv.time;
+    document.getElementById('tv-time').textContent = tv.time.toFixed(2) + 's / ' + tv.duration.toFixed(2) + 's';
+    document.getElementById('tv-play').innerHTML = tv.playing ? '&#10074;&#10074;' : '&#9654;';
+  }
+  function tvLoop(now) {
+    if (!tv.open) return;
+    const dt = Math.min(0.1, (now - tv.lastFrame) / 1000);
+    tv.lastFrame = now;
+    if (tv.playing) {
+      tv.time += dt * tv.speed;
+      if (tv.time >= tv.duration) { tv.time = tv.duration; tv.playing = false; }
+      tvUpdateHud();
+    }
+    tvRender();
+    requestAnimationFrame(tvLoop);
+  }
+  function openTweenViewer() {
+    tv.scene = tvCompile();
+    tv.duration = Math.max(0.01, tv.scene.duration);
+    tv.time = 0;
+    tv.playing = tv.scene.objects.length > 0;
+    const scrub = document.getElementById('tv-scrub');
+    scrub.max = tv.duration; scrub.step = Math.max(0.01, tv.duration / 1000);
+    const placeable = tv.scene.objects.length;
+    document.getElementById('tween-summary').textContent =
+      placeable ? `${placeable} object${placeable === 1 ? '' : 's'} \u00b7 ${tv.duration.toFixed(2)}s` : 'nothing to preview in this tab';
+    tweenOverlay.classList.add('open');
+    tv.open = true;
+    tv.lastFrame = performance.now();
+    requestAnimationFrame(() => { tvFit(); tvUpdateHud(); requestAnimationFrame(tvLoop); });
+  }
+  function closeTweenViewer() { tv.open = false; tv.playing = false; tweenOverlay.classList.remove('open'); }
+
+  document.getElementById('btn-tweenview').addEventListener('click', openTweenViewer);
+  document.getElementById('tween-close').addEventListener('click', closeTweenViewer);
+  tweenOverlay.addEventListener('click', (e) => { if (e.target === tweenOverlay) closeTweenViewer(); });
+  document.getElementById('tv-play').addEventListener('click', () => {
+    if (tv.time >= tv.duration) tv.time = 0;
+    tv.playing = !tv.playing; tvUpdateHud();
+  });
+  document.getElementById('tv-restart').addEventListener('click', () => { tv.time = 0; tv.playing = true; tvUpdateHud(); });
+  document.getElementById('tv-scrub').addEventListener('input', (e) => { tv.time = Number(e.target.value); tvUpdateHud(); });
+  document.getElementById('tv-speed').addEventListener('change', (e) => { tv.speed = Number(e.target.value); });
+  document.getElementById('tv-view').addEventListener('change', (e) => { tv.view = e.target.value; tvFit(); });
+  document.getElementById('tv-trails').addEventListener('change', (e) => { tv.trails = e.target.checked; });
+  document.getElementById('tv-labels').addEventListener('change', (e) => { tv.labels = e.target.checked; });
+  document.getElementById('tv-fit').addEventListener('click', tvFit);
+  window.addEventListener('keydown', (e) => {
+    if (!tv.open) return;
+    if (e.key === 'Escape') closeTweenViewer();
+    if (e.code === 'Space' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      if (tv.time >= tv.duration) tv.time = 0;
+      tv.playing = !tv.playing; tvUpdateHud();
+    }
+  });
+  // Pan + zoom
+  tvCanvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    tvCanvas.classList.add('panning');
+    const sx = e.clientX, sy = e.clientY, px = tv.panX, py = tv.panY;
+    const onMove = (ev) => { tv.panX = px + (ev.clientX - sx); tv.panY = py + (ev.clientY - sy); };
+    const onUp = () => {
+      tvCanvas.classList.remove('panning');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  tvCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = tvCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - rect.width / 2;
+    const my = e.clientY - rect.top - rect.height / 2;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const ns = Math.max(0.2, Math.min(120, tv.scale * factor));
+    const real = ns / tv.scale;
+    tv.panX = mx - (mx - tv.panX) * real;
+    tv.panY = my - (my - tv.panY) * real;
+    tv.scale = ns;
+  }, { passive: false });
 
   // ── Compare tabs (Monaco diff view) ──
   const compareOverlay = document.getElementById('compare-overlay');
