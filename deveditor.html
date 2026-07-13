@@ -7,6 +7,17 @@
 <script>
 const CHANGELOG = [
   {
+    version: "Power Tools",
+    date: "13/07/2026",
+    changes: [
+      { type: "new", text: "Execution timeline: see every command plotted at the moment it runs (built from wait durations), and click any entry to jump to its line." },
+      { type: "new", text: "F2 renames a %variable everywhere in the tab. Putting the cursor on a %variable or UID highlights all its uses, and Shift+F12 lists them." },
+      { type: "new", text: "Search all tabs at once with Ctrl+Shift+F — results are grouped per tab and clicking one jumps straight there." },
+      { type: "new", text: "Compare any two tabs side by side in a proper diff view." },
+      { type: "new", text: "Settings (⚙): font size, word wrap, minimap, whitespace markers and Ctrl+scroll zoom — saved per browser." },
+    ]
+  },
+  {
     version: "Colour Picker & Editor Polish",
     date: "12/07/2026",
     changes: [
@@ -506,6 +517,85 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 
 /* Save-snippet naming dialog */
 #save-snippet-overlay .modal-box { width: 340px; }
+
+/* ── Timeline ── */
+#timeline-summary { color: #666; font-size: 11px; margin-left: auto; padding-right: 8px; }
+#timeline-body { flex: 1; overflow-y: auto; padding: 12px 16px; font-family: Consolas, monospace; }
+.tl-group { display: flex; gap: 12px; }
+.tl-time-col { width: 74px; flex-shrink: 0; text-align: right; position: relative; }
+.tl-time { color: #61afef; font-size: 12px; font-weight: 600; padding-top: 1px; }
+.tl-rail { position: absolute; right: -7px; top: 0; bottom: 0; width: 2px; background: #2a2a2a; }
+.tl-dot {
+  position: absolute; right: -11px; top: 4px; width: 10px; height: 10px;
+  border-radius: 50%; background: #1a1a1a; border: 2px solid #61afef; z-index: 1;
+}
+.tl-items { flex: 1; min-width: 0; padding: 0 0 4px 10px; }
+.tl-item {
+  display: flex; gap: 8px; align-items: baseline; padding: 2px 6px;
+  font-size: 12px; cursor: pointer; border-radius: 3px;
+  white-space: nowrap; overflow: hidden;
+}
+.tl-item:hover { background: #222; }
+.tl-item-line { color: #4a4a4a; font-size: 10px; width: 34px; flex-shrink: 0; }
+.tl-item-cmd { color: #c678dd; flex-shrink: 0; }
+.tl-item-rest { color: #8a919e; overflow: hidden; text-overflow: ellipsis; }
+.tl-item-dur { color: #e5c07b; font-size: 10px; flex-shrink: 0; }
+.tl-gap { color: #4a4a4a; font-size: 10px; padding: 3px 0 10px 96px; font-style: italic; }
+.tl-empty { color: #444; font-size: 12px; font-style: italic; padding: 10px; }
+
+/* ── Compare ── */
+.compare-select {
+  background: #252525; color: #abb2bf; border: 1px solid #444; border-radius: 3px;
+  font-family: Consolas, monospace; font-size: 11px; padding: 3px 6px; outline: none;
+  max-width: 180px;
+}
+.compare-select:focus { border-color: #61afef; }
+#compare-diff { flex: 1; min-height: 0; }
+
+/* ── Global search ── */
+#search-bar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid #333; flex-shrink: 0;
+}
+#search-input {
+  flex: 1; background: #252525; border: 1px solid #444; border-radius: 3px;
+  color: #abb2bf; font-family: Consolas, monospace; font-size: 12px;
+  padding: 6px 8px; outline: none;
+}
+#search-input:focus { border-color: #61afef; }
+#search-case-label {
+  color: #666; font-size: 11px; font-family: Consolas, monospace;
+  display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none;
+}
+#search-results { flex: 1; overflow-y: auto; padding: 6px 0; min-height: 120px; }
+.search-tab-header {
+  padding: 5px 14px 3px; color: #98c379; font-family: Consolas, monospace;
+  font-size: 11px; font-weight: 600;
+}
+.search-hit {
+  display: flex; gap: 10px; padding: 2px 14px 2px 22px; cursor: pointer;
+  font-family: Consolas, monospace; font-size: 12px; align-items: baseline;
+}
+.search-hit:hover { background: #222; }
+.search-hit-ln { color: #4a4a4a; font-size: 10px; width: 40px; flex-shrink: 0; }
+.search-hit-text { color: #8a919e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-hit-text mark { background: #61417a; color: #e2c6ff; border-radius: 2px; padding: 0 1px; }
+.search-none { color: #444; font-size: 12px; font-style: italic; padding: 12px 14px; font-family: Consolas, monospace; }
+
+/* ── Settings ── */
+#settings-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 2px; color: #abb2bf; font-size: 12px; font-family: Consolas, monospace;
+}
+.setting-row input[type="number"] {
+  width: 58px; background: #252525; border: 1px solid #444; border-radius: 3px;
+  color: #abb2bf; font-family: Consolas, monospace; font-size: 12px;
+  padding: 3px 6px; outline: none;
+}
+.setting-row input[type="number"]:focus { border-color: #61afef; }
+.setting-row input[type="checkbox"] { accent-color: #61afef; width: 14px; height: 14px; cursor: pointer; }
+#settings-hint { color: #4a4a4a; font-size: 10px; margin-top: 8px; line-height: 1.5; }
 #save-snippet-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 #save-snippet-body p { color: #888; font-size: 12px; }
 #save-snippet-name {
@@ -526,11 +616,16 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
       <button class="bar-btn" id="btn-import">Import</button>
       <button class="bar-btn" id="btn-export">Export</button>
       <span class="bar-sep"></span>
+      <button class="bar-btn" id="btn-search" title="Search all tabs (Ctrl+Shift+F)">Search</button>
+      <button class="bar-btn" id="btn-timeline" title="Execution timeline">Timeline</button>
+      <button class="bar-btn" id="btn-compare" title="Compare two tabs">Compare</button>
+      <span class="bar-sep"></span>
       <button class="bar-btn" id="btn-docs">Commands</button>
       <button class="bar-btn" id="btn-tips">Tips</button>
       <button class="bar-btn" id="btn-snippets">Snippets</button>
       <span class="bar-sep"></span>
       <button class="bar-btn" id="btn-changelog">Changelog</button>
+      <button class="bar-btn" id="btn-settings" title="Editor settings">&#9881;</button>
     </div>
   </div>
   <div id="editor-row">
@@ -682,6 +777,80 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   </div>
 </div>
 
+<!-- Execution timeline modal -->
+<div id="timeline-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:560px; height:70vh;">
+    <div class="modal-header">
+      <span class="modal-title">Execution timeline</span>
+      <span id="timeline-summary"></span>
+      <button class="modal-close" id="timeline-close">&#x2715;</button>
+    </div>
+    <div id="timeline-body"></div>
+  </div>
+</div>
+
+<!-- Compare tabs modal -->
+<div id="compare-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:88vw; height:78vh;">
+    <div class="modal-header">
+      <span class="modal-title">Compare tabs</span>
+      <select id="compare-left" class="compare-select"></select>
+      <span style="color:#555; font-size:11px;">vs</span>
+      <select id="compare-right" class="compare-select"></select>
+      <button class="modal-close" id="compare-close" style="margin-left:auto;">&#x2715;</button>
+    </div>
+    <div id="compare-diff"></div>
+  </div>
+</div>
+
+<!-- Global search modal -->
+<div id="search-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:520px; max-height:70vh;">
+    <div class="modal-header">
+      <span class="modal-title">Search all tabs</span>
+      <button class="modal-close" id="search-close">&#x2715;</button>
+    </div>
+    <div id="search-bar">
+      <input type="text" id="search-input" placeholder="Type to search every tab&hellip;">
+      <label id="search-case-label"><input type="checkbox" id="search-case"> Aa</label>
+    </div>
+    <div id="search-results"></div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settings-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:340px;">
+    <div class="modal-header">
+      <span class="modal-title">Editor settings</span>
+      <button class="modal-close" id="settings-close">&#x2715;</button>
+    </div>
+    <div id="settings-body">
+      <div class="setting-row">
+        <span>Font size</span>
+        <input type="number" id="set-fontsize" min="8" max="30" step="1">
+      </div>
+      <div class="setting-row">
+        <span>Word wrap</span>
+        <input type="checkbox" id="set-wordwrap">
+      </div>
+      <div class="setting-row">
+        <span>Minimap</span>
+        <input type="checkbox" id="set-minimap">
+      </div>
+      <div class="setting-row">
+        <span>Show whitespace</span>
+        <input type="checkbox" id="set-whitespace">
+      </div>
+      <div class="setting-row">
+        <span>Ctrl+scroll zoom</span>
+        <input type="checkbox" id="set-wheelzoom">
+      </div>
+      <p id="settings-hint">Settings are saved in this browser and apply instantly.</p>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs/loader.min.js"></script>
 <script>
 // ── Changelog ──
@@ -716,6 +885,9 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     document.getElementById('multiexport-overlay').classList.remove('open');
     document.getElementById('snippets-overlay').classList.remove('open');
     document.getElementById('save-snippet-overlay').classList.remove('open');
+    document.getElementById('timeline-overlay').classList.remove('open');
+    document.getElementById('search-overlay').classList.remove('open');
+    document.getElementById('settings-overlay').classList.remove('open');
   }});
 })();
 </script>
@@ -963,6 +1135,18 @@ require(['vs/editor/editor.main'], function () {
       category: `Editor`,
       body: `Lines using the color command (and trigger color) show a small colour swatch next to the RGB values — click it to open a visual colour picker that rewrites the numbers for you.\n\nPress Ctrl+/ to comment or uncomment the selected lines.\n\nYou can also drag .txt files straight onto the editor window — each one opens in its own new tab.`,
       example: `color 1 %myPart 255 128 0`,
+    },
+    {
+      title: `Variable tools`,
+      category: `Editor`,
+      body: `Put the cursor on any %variable (or a full UID) and every place it's used lights up, so you can trace what a script does to one object at a glance.\n\nPress F2 on a %variable to rename it everywhere in the tab at once — no more find-and-replace slip-ups. Shift+F12 (or right-click → Find All References) lists every line that touches it.`,
+      example: `create 1 part 10 0 5\ncolor 1 %myPart 255 128 0\ntween 1 %myPart 2.5 10 5 5 0 90 0`,
+    },
+    {
+      title: `Timeline, search & compare`,
+      category: `Editor`,
+      body: `The Timeline button plots every command at the moment it will run, worked out from your wait durations — great for checking the pacing of a scripted sequence. Click any entry to jump to its line.\n\nCtrl+Shift+F searches across every open tab at once. The Compare button shows any two tabs side by side as a diff, which makes it easy to spot what changed between two versions of a script.\n\nThe ⚙ button holds editor settings: font size, word wrap, minimap, whitespace markers and Ctrl+scroll zooming.`,
+      example: `create 1 part 0 0 0\nwait 2\ntween 1 %gate 3 0 10 0 0 0 0\nwait 3\nweather set Storm1`,
     },
   ];
 
@@ -1616,6 +1800,71 @@ require(['vs/editor/editor.main'], function () {
     }
   });
 
+  // ── %variable intelligence: highlight / references / F2 rename ──
+  // Read-only tooling on top of the language — parsing and validation untouched.
+  const VAR_TOKEN_RE = /^%[a-zA-Z_]\w*$/;
+
+  function tokenAtPosition(model, position) {
+    const tokens = parseLine(model.getLineContent(position.lineNumber));
+    return tokens.find(t => position.column >= t.col && position.column <= t.col + t.value.length) || null;
+  }
+  function trackableAt(model, position) {
+    const t = tokenAtPosition(model, position);
+    return (t && (VAR_TOKEN_RE.test(t.value) || UUID_RE.test(t.value))) ? t : null;
+  }
+  function findOccurrences(model, value) {
+    const ranges = [];
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      for (const t of parseLine(model.getLineContent(ln))) {
+        if (t.value === value) ranges.push(new monaco.Range(ln, t.col, ln, t.col + t.value.length));
+      }
+    }
+    return ranges;
+  }
+
+  // Cursor on a %variable or UID -> every use of it lights up.
+  monaco.languages.registerDocumentHighlightProvider(LANG, {
+    provideDocumentHighlights(model, position) {
+      const t = trackableAt(model, position);
+      if (!t) return [];
+      return findOccurrences(model, t.value).map(range => ({ range, kind: monaco.languages.DocumentHighlightKind.Text }));
+    }
+  });
+
+  // Shift+F12 / right-click -> Find All References
+  monaco.languages.registerReferenceProvider(LANG, {
+    provideReferences(model, position) {
+      const t = trackableAt(model, position);
+      if (!t) return [];
+      return findOccurrences(model, t.value).map(range => ({ uri: model.uri, range }));
+    }
+  });
+
+  // F2 on a %variable -> rename every occurrence in the tab.
+  monaco.languages.registerRenameProvider(LANG, {
+    resolveRenameLocation(model, position) {
+      const t = tokenAtPosition(model, position);
+      if (!t || !VAR_TOKEN_RE.test(t.value)) {
+        return {
+          range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+          text: '', rejectReason: 'Only %variables can be renamed.'
+        };
+      }
+      return { range: new monaco.Range(position.lineNumber, t.col, position.lineNumber, t.col + t.value.length), text: t.value };
+    },
+    provideRenameEdits(model, position, newName) {
+      const t = tokenAtPosition(model, position);
+      if (!t || !VAR_TOKEN_RE.test(t.value)) return { edits: [] };
+      let name = newName.trim();
+      if (!name.startsWith('%')) name = '%' + name;
+      if (!VAR_TOKEN_RE.test(name)) return { edits: [], rejectReason: 'Variable names look like %someName (letters, digits, _).' };
+      const edits = findOccurrences(model, t.value).map(range => ({
+        resource: model.uri, textEdit: { range, text: name }, versionId: model.getVersionId(),
+      }));
+      return { edits };
+    }
+  });
+
   let currentMarkers = [];
   function severityLabel(s) {
     if (s === monaco.MarkerSeverity.Error)   return { label: 'x', cls: 'error',   text: 'error' };
@@ -1975,6 +2224,205 @@ require(['vs/editor/editor.main'], function () {
       reader.readAsText(file);
     });
   });
+
+  // ── Execution timeline ──
+  // Walks the active tab, accumulating `wait` durations, and shows every
+  // command at the moment it would run. Purely a view — nothing is executed.
+  const timelineOverlay = document.getElementById('timeline-overlay');
+  function fmtTime(t) { return (+t.toFixed(2)) + 's'; }
+
+  function buildTimeline() {
+    const model = editor.getModel();
+    const body = document.getElementById('timeline-body');
+    const summary = document.getElementById('timeline-summary');
+    if (!model) return;
+    const groups = [];
+    let t = 0, cur = null, cmdCount = 0;
+    for (let ln = 1; ln <= model.getLineCount(); ln++) {
+      const tokens = parseLine(model.getLineContent(ln));
+      if (!tokens.length) continue;
+      const cmd = tokens[0].value.toLowerCase();
+      if (!CMDS[cmd]) continue;
+      if (cmd === 'wait') {
+        const n = Number(tokens[1] && tokens[1].value);
+        if (!isNaN(n)) { t += n; cur = null; }
+        continue;
+      }
+      cmdCount++;
+      if (!cur) { cur = { time: t, items: [] }; groups.push(cur); }
+      let dur = null;
+      if (cmd === 'tween' && tokens[3]) { const d = Number(tokens[3].value); if (!isNaN(d)) dur = d; }
+      cur.items.push({ ln, cmd, rest: tokens.slice(1).map(x => x.value).join(' '), dur });
+    }
+    summary.textContent = `${cmdCount} command${cmdCount === 1 ? '' : 's'} \u00b7 runs over ${fmtTime(t)}`;
+    if (!groups.length) { body.innerHTML = '<div class="tl-empty">No commands in this tab yet.</div>'; return; }
+    let html = '';
+    groups.forEach((g, i) => {
+      html += `<div class="tl-group"><div class="tl-time-col"><div class="tl-time">${fmtTime(g.time)}</div><div class="tl-rail"></div><div class="tl-dot"></div></div><div class="tl-items">`;
+      g.items.forEach(it => {
+        html += `<div class="tl-item" data-ln="${it.ln}"><span class="tl-item-line">L${it.ln}</span>` +
+                `<span class="tl-item-cmd">${escapeHtml(it.cmd)}</span><span class="tl-item-rest">${escapeHtml(it.rest)}</span>` +
+                (it.dur != null ? `<span class="tl-item-dur">${fmtTime(it.dur)}</span>` : '') + `</div>`;
+      });
+      html += `</div></div>`;
+      if (groups[i + 1]) html += `<div class="tl-gap">wait ${fmtTime(groups[i + 1].time - g.time)}</div>`;
+    });
+    body.innerHTML = html;
+    body.querySelectorAll('.tl-item').forEach(el => el.addEventListener('click', () => {
+      const ln = +el.dataset.ln;
+      timelineOverlay.classList.remove('open');
+      editor.setPosition({ lineNumber: ln, column: 1 });
+      editor.revealLineInCenter(ln);
+      editor.focus();
+    }));
+  }
+  document.getElementById('btn-timeline').addEventListener('click', () => { buildTimeline(); timelineOverlay.classList.add('open'); });
+  document.getElementById('timeline-close').addEventListener('click', () => timelineOverlay.classList.remove('open'));
+  timelineOverlay.addEventListener('click', (e) => { if (e.target === timelineOverlay) timelineOverlay.classList.remove('open'); });
+
+  // ── Compare tabs (Monaco diff view) ──
+  const compareOverlay = document.getElementById('compare-overlay');
+  const compareLeft = document.getElementById('compare-left');
+  const compareRight = document.getElementById('compare-right');
+  let diffEditor = null, diffModels = [];
+
+  function fillCompareSelects() {
+    const ids = Object.keys(tabs);
+    const opts = ids.map(id => `<option value="${id}">${escapeHtml(tabs[id].name)}</option>`).join('');
+    compareLeft.innerHTML = opts;
+    compareRight.innerHTML = opts;
+    compareLeft.value = activeTabId;
+    compareRight.value = ids.find(id => id !== activeTabId) || activeTabId;
+  }
+  function renderDiff() {
+    const l = tabs[compareLeft.value], r = tabs[compareRight.value];
+    if (!l || !r) return;
+    const old = diffModels; diffModels = [];
+    const om = monaco.editor.createModel(l.model.getValue(), LANG);
+    const mm = monaco.editor.createModel(r.model.getValue(), LANG);
+    diffModels = [om, mm];
+    if (!diffEditor) {
+      diffEditor = monaco.editor.createDiffEditor(document.getElementById('compare-diff'), {
+        theme: 'cmdDark', readOnly: true, originalEditable: false,
+        automaticLayout: true, renderSideBySide: true,
+        minimap: { enabled: false }, fontSize: 13,
+        fontFamily: 'Consolas, "Courier New", monospace',
+        scrollBeyondLastLine: false,
+      });
+    }
+    diffEditor.setModel({ original: om, modified: mm });
+    old.forEach(m => m.dispose());
+  }
+  function closeCompare() {
+    compareOverlay.classList.remove('open');
+    if (diffEditor) diffEditor.setModel(null);
+    diffModels.forEach(m => m.dispose());
+    diffModels = [];
+  }
+  document.getElementById('btn-compare').addEventListener('click', () => {
+    fillCompareSelects();
+    compareOverlay.classList.add('open');
+    renderDiff();
+  });
+  compareLeft.addEventListener('change', renderDiff);
+  compareRight.addEventListener('change', renderDiff);
+  document.getElementById('compare-close').addEventListener('click', closeCompare);
+  compareOverlay.addEventListener('click', (e) => { if (e.target === compareOverlay) closeCompare(); });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && compareOverlay.classList.contains('open')) closeCompare();
+  });
+
+  // ── Global search across every tab (Ctrl+Shift+F) ──
+  const searchOverlay = document.getElementById('search-overlay');
+  const searchInput = document.getElementById('search-input');
+  const searchCase = document.getElementById('search-case');
+  const searchResults = document.getElementById('search-results');
+  let searchDebounce = null;
+
+  function openSearch() {
+    searchOverlay.classList.add('open');
+    searchInput.focus();
+    searchInput.select();
+    runGlobalSearch();
+  }
+  function runGlobalSearch() {
+    const q = searchInput.value;
+    if (!q) { searchResults.innerHTML = '<div class="search-none">Type to search every open tab.</div>'; return; }
+    const cs = searchCase.checked;
+    const needle = cs ? q : q.toLowerCase();
+    let html = '', total = 0;
+    const MAX = 300;
+    for (const id of Object.keys(tabs)) {
+      const lines = tabs[id].model.getValue().split('\n');
+      let tabHtml = '';
+      for (let i = 0; i < lines.length && total < MAX; i++) {
+        const line = lines[i];
+        const idx = (cs ? line : line.toLowerCase()).indexOf(needle);
+        if (idx < 0) continue;
+        total++;
+        tabHtml += `<div class="search-hit" data-tab="${id}" data-ln="${i + 1}" data-col="${idx + 1}">` +
+                   `<span class="search-hit-ln">L${i + 1}</span><span class="search-hit-text">` +
+                   escapeHtml(line.slice(0, idx)) + `<mark>` + escapeHtml(line.slice(idx, idx + q.length)) + `</mark>` +
+                   escapeHtml(line.slice(idx + q.length)) + `</span></div>`;
+      }
+      if (tabHtml) html += `<div class="search-tab-header">${escapeHtml(tabs[id].name)}</div>` + tabHtml;
+    }
+    searchResults.innerHTML = html || '<div class="search-none">No matches.</div>';
+    if (total >= MAX) searchResults.innerHTML += `<div class="search-none">Stopped at ${MAX} matches \u2014 refine the search.</div>`;
+    searchResults.querySelectorAll('.search-hit').forEach(el => el.addEventListener('click', () => {
+      searchOverlay.classList.remove('open');
+      switchTab(el.dataset.tab);
+      editor.setPosition({ lineNumber: +el.dataset.ln, column: +el.dataset.col });
+      editor.revealLineInCenter(+el.dataset.ln);
+      editor.focus();
+    }));
+  }
+  searchInput.addEventListener('input', () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(runGlobalSearch, 120); });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { const first = searchResults.querySelector('.search-hit'); if (first) first.click(); }
+  });
+  searchCase.addEventListener('change', runGlobalSearch);
+  document.getElementById('btn-search').addEventListener('click', openSearch);
+  document.getElementById('search-close').addEventListener('click', () => searchOverlay.classList.remove('open'));
+  searchOverlay.addEventListener('click', (e) => { if (e.target === searchOverlay) searchOverlay.classList.remove('open'); });
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyF') { e.preventDefault(); openSearch(); }
+  });
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, openSearch);
+
+  // ── Editor settings (persisted per browser) ──
+  const SETTINGS_KEY = 'cmdEditor_settings';
+  const settingsOverlay = document.getElementById('settings-overlay');
+  const settings = { fontSize: 14, wordWrap: false, minimap: false, whitespace: false, wheelZoom: true };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) {}
+
+  function applySettings() {
+    settings.fontSize = Math.max(8, Math.min(30, Number(settings.fontSize) || 14));
+    editor.updateOptions({
+      fontSize: settings.fontSize,
+      wordWrap: settings.wordWrap ? 'on' : 'off',
+      minimap: { enabled: settings.minimap },
+      renderWhitespace: settings.whitespace ? 'boundary' : 'none',
+      mouseWheelZoom: settings.wheelZoom,
+    });
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+  function syncSettingsUI() {
+    document.getElementById('set-fontsize').value = settings.fontSize;
+    document.getElementById('set-wordwrap').checked = settings.wordWrap;
+    document.getElementById('set-minimap').checked = settings.minimap;
+    document.getElementById('set-whitespace').checked = settings.whitespace;
+    document.getElementById('set-wheelzoom').checked = settings.wheelZoom;
+  }
+  document.getElementById('set-fontsize').addEventListener('input', (e) => { settings.fontSize = e.target.value; applySettings(); });
+  document.getElementById('set-wordwrap').addEventListener('change', (e) => { settings.wordWrap = e.target.checked; applySettings(); });
+  document.getElementById('set-minimap').addEventListener('change', (e) => { settings.minimap = e.target.checked; applySettings(); });
+  document.getElementById('set-whitespace').addEventListener('change', (e) => { settings.whitespace = e.target.checked; applySettings(); });
+  document.getElementById('set-wheelzoom').addEventListener('change', (e) => { settings.wheelZoom = e.target.checked; applySettings(); });
+  document.getElementById('btn-settings').addEventListener('click', () => { syncSettingsUI(); settingsOverlay.classList.add('open'); });
+  document.getElementById('settings-close').addEventListener('click', () => settingsOverlay.classList.remove('open'));
+  settingsOverlay.addEventListener('click', (e) => { if (e.target === settingsOverlay) settingsOverlay.classList.remove('open'); });
+  applySettings();
 
   // ── Docs modal ──
   (function initDocs() {
