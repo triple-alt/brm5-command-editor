@@ -10,7 +10,7 @@ const CHANGELOG = [
     version: "Power Tools",
     date: "13/07/2026",
     changes: [
-      { type: "new", text: "Tween viewer: plays your script's motion on a canvas — parts move, resize, recolour and explode exactly when the wait timing says they would. Scrub, change speed, switch camera planes (top/front/side), and follow motion trails." },
+      { type: "new", text: "Tween viewer: plays your script's motion on a canvas — parts move, resize, recolour and explode exactly when the wait timing says they would. The top-down view overlays the Rono map (2 px = 1 unit); scrub, change speed, switch camera planes and follow motion trails." },
       { type: "new", text: "Execution timeline: see every command plotted at the moment it runs (built from wait durations), and click any entry to jump to its line." },
       { type: "new", text: "F2 renames a %variable everywhere in the tab. Putting the cursor on a %variable or UID highlights all its uses, and Shift+F12 lists them." },
       { type: "new", text: "Search all tabs at once with Ctrl+Shift+F — results are grouped per tab and clicking one jumps straight there." },
@@ -832,11 +832,12 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
         <option value="front">Front (X/Y)</option>
         <option value="side">Side (Z/Y)</option>
       </select>
+      <label class="tv-check"><input type="checkbox" id="tv-map" checked> map</label>
       <label class="tv-check"><input type="checkbox" id="tv-trails" checked> trails</label>
       <label class="tv-check"><input type="checkbox" id="tv-labels" checked> labels</label>
       <button class="tv-btn" id="tv-fit" title="Fit everything in view">Fit</button>
     </div>
-    <div id="tween-hint">Objects appear where their first command places them &middot; preview uses linear easing &middot; drag to pan, scroll to zoom</div>
+    <div id="tween-hint">Top view shows the Rono map (2 px = 1 unit, centred on origin) &middot; objects appear where their first command places them &middot; linear easing &middot; drag to pan, scroll to zoom</div>
     <div id="tween-canvas-wrap"><canvas id="tween-canvas"></canvas></div>
   </div>
 </div>
@@ -1203,7 +1204,7 @@ require(['vs/editor/editor.main'], function () {
     {
       title: `Tween viewer`,
       category: `Editor`,
-      body: `The Tweens button plays your script's motion on a 2D canvas so you can check choreography before running it in game. It compiles the active tab into keyframes using your wait timing: parts appear on create/spawn, glide on tween, jump on move, and resize/recolour when those commands fire. Explosions flash as expanding rings.\n\nScrub the bar or press Space to play/pause, change the speed, and switch between Top (X/Z), Front (X/Y) and Side (Z/Y) camera planes. Trails show each object's route through the scene. Drag to pan, scroll to zoom, Fit to frame everything.\n\nSince the game assigns real UIDs at runtime, objects the script only ever tweens appear where their first command places them — the preview is about relative motion and timing, not exact scene layout.`,
+      body: `The Tweens button plays your script's motion on a 2D canvas so you can check choreography before running it in game. It compiles the active tab into keyframes using your wait timing: parts appear on create/spawn, glide on tween, jump on move, and resize/recolour when those commands fire. Explosions flash as expanding rings.\n\nThe top-down view draws the Rono map underneath at 2 image pixels per unit (centred on the origin), so positions line up with real places — toggle it with the map checkbox. Scrub the bar or press Space to play/pause, change the speed, and switch between Top (X/Z), Front (X/Y) and Side (Z/Y) camera planes. Trails show each object's route. Drag to pan, scroll to zoom, Fit to frame everything.\n\nSince the game assigns real UIDs at runtime, objects the script only ever tweens appear where their first command places them — the preview is about relative motion and timing, not exact scene layout.`,
       example: `create 1 part 0 0 0\nwait 1\ntween 1 %gate 3 0 10 0 0 90 0\nwait 2\nexplosion 8 50 0 0 0 None`,
     },
     {
@@ -2359,10 +2360,21 @@ require(['vs/editor/editor.main'], function () {
   const tvCtx = tvCanvas.getContext('2d');
   const tv = {
     open: false, playing: false, time: 0, duration: 0, speed: 1,
-    view: 'top', trails: true, labels: true,
+    view: 'top', trails: true, labels: true, map: true,
     scale: 6, panX: 0, panY: 0, lastFrame: 0,
     scene: { objects: [], explosions: [] },
   };
+
+  // Map underlay for the top-down view. 2 image pixels = 1 world unit (2:1),
+  // image centred on the world origin. Loaded lazily; if the file isn't
+  // there (e.g. the HTML is opened outside the repo) the viewer just draws
+  // its plain grid instead.
+  const TV_MAP_PX_PER_UNIT = 2;
+  const tvMapImg = new Image();
+  let tvMapReady = false;
+  tvMapImg.onload = () => { tvMapReady = true; };
+  tvMapImg.onerror = () => { tvMapReady = false; };
+  tvMapImg.src = 'media/images/Rono8k(1).png';
 
   function tvHue(key) {
     let h = 0;
@@ -2503,11 +2515,22 @@ require(['vs/editor/editor.main'], function () {
     tvCtx.clearRect(0, 0, w, hgt);
     const a = tvAxes();
 
+    // Map underlay (top view only): image centred on world origin,
+    // TV_MAP_PX_PER_UNIT image pixels per world unit.
+    const mapDrawn = tv.map && tv.view === 'top' && tvMapReady;
+    if (mapDrawn) {
+      const worldW = tvMapImg.naturalWidth / TV_MAP_PX_PER_UNIT;
+      const worldH = tvMapImg.naturalHeight / TV_MAP_PX_PER_UNIT;
+      const [msx, msy] = tvToScreen([-worldW / 2, 0, -worldH / 2], w, hgt);
+      tvCtx.imageSmoothingEnabled = true;
+      tvCtx.drawImage(tvMapImg, msx, msy, worldW * tv.scale, worldH * tv.scale);
+    }
+
     // Grid — pick a spacing that lands between 40 and 120 px.
     let g = 1;
     while (g * tv.scale < 40) g *= (String(g)[0] === '2' ? 2.5 : 2);
     while (g * tv.scale > 120) g /= 2;
-    tvCtx.strokeStyle = '#1d1d1d'; tvCtx.lineWidth = 1;
+    tvCtx.strokeStyle = mapDrawn ? 'rgba(255,255,255,0.06)' : '#1d1d1d'; tvCtx.lineWidth = 1;
     const startH = Math.floor((-w / 2 - tv.panX) / (g * tv.scale)) * g;
     const startV = Math.floor((-hgt / 2 - tv.panY * a.flip) / (g * tv.scale)) * g;
     tvCtx.beginPath();
@@ -2523,7 +2546,7 @@ require(['vs/editor/editor.main'], function () {
     }
     tvCtx.stroke();
     // Origin axes
-    tvCtx.strokeStyle = '#2c2c2c';
+    tvCtx.strokeStyle = mapDrawn ? 'rgba(255,255,255,0.14)' : '#2c2c2c';
     tvCtx.beginPath();
     const oz = tvToScreen([0, 0, 0], w, hgt);
     tvCtx.moveTo(oz[0], 0); tvCtx.lineTo(oz[0], hgt);
@@ -2635,6 +2658,7 @@ require(['vs/editor/editor.main'], function () {
   document.getElementById('tv-scrub').addEventListener('input', (e) => { tv.time = Number(e.target.value); tvUpdateHud(); });
   document.getElementById('tv-speed').addEventListener('change', (e) => { tv.speed = Number(e.target.value); });
   document.getElementById('tv-view').addEventListener('change', (e) => { tv.view = e.target.value; tvFit(); });
+  document.getElementById('tv-map').addEventListener('change', (e) => { tv.map = e.target.checked; });
   document.getElementById('tv-trails').addEventListener('change', (e) => { tv.trails = e.target.checked; });
   document.getElementById('tv-labels').addEventListener('change', (e) => { tv.labels = e.target.checked; });
   document.getElementById('tv-fit').addEventListener('click', tvFit);
