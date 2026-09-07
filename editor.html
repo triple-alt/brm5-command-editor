@@ -542,6 +542,17 @@ require(['vs/editor/editor.main'], function () {
       doc: 'Save, load, and manage map and model files.',
       example: 'file save myMap\nfile list\nfile insertmodel 1 myModel 0 0 0 0',
     },
+    squadspawn: {
+      params: [
+        {name: 'pX', type: 'number'},
+        {name: 'pY', type: 'number'},
+        {name: 'pZ', type: 'number'},
+        {name: 'r', type: 'number'},
+        {name: 'colour', type: 'enum', values: SQUAD_TYPES}
+      ],
+      doc: 'Sets the spawn position (x, y, z) and rotation (r) for the specified squad.',
+      example: 'squadspawn 100 75 -25 0 red'
+    },
   };
 
   // ── Tab manager ──
@@ -563,7 +574,7 @@ require(['vs/editor/editor.main'], function () {
     tokenizer: {
       root: [
         [/\/\/.*$/, 'comment'],
-        [/\b(create|tween|bot|color|spawn|weather|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file)\b/, 'keyword'],
+        [/\b(create|tween|bot|color|spawn|weather|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file|squadspawn)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
         [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
