@@ -113,6 +113,7 @@ const FILE_SUB        = ['save','load','delete','loadcopy','savecopy','list','sa
 const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
 const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','IsLooping'];
 const SQUAD_TYPES     = ['none','red','blue','orange','yellow','green'];
+const SQUAD_SPAWN_TYPES = ['neutral','red','blue','orange','yellow','green'];
 const COLLISION_TYPES = ['0','1','2','3'];
 const TELEPORT_TYPES  = ['all','squad','player','other'];
 const BOOL_EN         = ['enable','disable'];
@@ -225,7 +226,7 @@ const CMDS = {
       {name: 'pY', type: 'number'},
       {name: 'pZ', type: 'number'},
       {name: 'r', type: 'number'},
-      {name: 'colour', type: 'enum', values: SQUAD_TYPES}
+      {name: 'colour', type: 'enum', values: SQUAD_SPAWN_TYPES}
     ],
     doc: 'Sets the spawn position (x, y, z) and rotation (r) for the specified squad.',
     example: 'squadspawn 100 75 -25 0 red'
