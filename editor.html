@@ -436,6 +436,7 @@ require(['vs/editor/editor.main'], function () {
   const PART_TYPES      = ['part','wedge','corner','cylinder','ball'];
   const WHITELIST_TYPES = ['Players','Bots','Helicopters','Ground','IsLooping'];
   const SQUAD_TYPES     = ['none','red','blue','orange','yellow','green'];
+  const SQUAD_SPAWN_TYPES = ['neutral','red','blue','orange','yellow','green'];
   const COLLISION_TYPES = ['0','1','2','3'];
   const TELEPORT_TYPES  = ['all','squad','player','other'];
   const BOOL_EN         = ['enable','disable'];
@@ -548,7 +549,7 @@ require(['vs/editor/editor.main'], function () {
         {name: 'pY', type: 'number'},
         {name: 'pZ', type: 'number'},
         {name: 'r', type: 'number'},
-        {name: 'colour', type: 'enum', values: SQUAD_TYPES}
+        {name: 'colour', type: 'enum', values: SQUAD_SPAWN_TYPES}
       ],
       doc: 'Sets the spawn position (x, y, z) and rotation (r) for the specified squad.',
       example: 'squadspawn 100 75 -25 0 red'
@@ -577,7 +578,7 @@ require(['vs/editor/editor.main'], function () {
         [/\b(create|tween|bot|color|spawn|weather|hud|revive|friendlyfire|collision|teleport|compounds|rename|squad|firstperson|material|reset|explosion|move|size|trigger|wait|ban|kick|duplicate|world|time|file|squadspawn)\b/, 'keyword'],
         [/\b(true|false|enable|disable|all|lock|unlock)\b/, 'constant'],
         [/%[a-zA-Z_]\w*/, 'type'],
-        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
+        [new RegExp('\\b(' + [...VEHICLE_ENUM,...TRIGGER_SUB,...SQUAD_TYPES,...SQUAD_SPAWN_TYPES,...TELEPORT_TYPES,...TIME_SUB,...WORLD_SUB,...FILE_SUB,...PART_TYPES,...MATERIALS].join('|') + ')\\b'), 'string'],
         [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'type'],
         [/-?\d+(\.\d+)?/, 'number'],
         [/"[^"]*"/, 'string'],
