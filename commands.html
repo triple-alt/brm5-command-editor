@@ -219,6 +219,17 @@ const CMDS = {
     doc: 'Save, load, and manage map and model files.',
     example: 'file save myMap\nfile list\nfile insertmodel 1 myModel 0 0 0 0',
   },
+  squadspawn: {
+    params: [
+      {name: 'pX', type: 'number'},
+      {name: 'pY', type: 'number'},
+      {name: 'pZ', type: 'number'},
+      {name: 'r', type: 'number'},
+      {name: 'colour', type: 'enum', values: SQUAD_TYPES}
+    ],
+    doc: 'Sets the spawn position (x, y, z) and rotation (r) for the specified squad.',
+    example: 'squadspawn 100 75 -25 0 red'
+  },
 };
 
 // ── Rendering ──
