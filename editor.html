@@ -175,6 +175,11 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .modal-title { color: #abb2bf; font-size: 13px; flex: 1; }
 .modal-close { background: none; border: none; color: #666; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
 .modal-close:hover { color: #abb2bf; }
+.modal-link {
+  color: #61afef; font-size: 11px; text-decoration: none;
+  border: 1px solid #444; border-radius: 3px; padding: 2px 8px;
+}
+.modal-link:hover { border-color: #61afef; background: #252525; }
 
 /* Import dialog */
 #import-overlay .modal-box { width: 360px; }
@@ -249,39 +254,13 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
 .cl-tag.fix    { background: #3a2020; color: #e06c75; border: 1px solid #5a3030; }
 .cl-tag.change { background: #2a2a10; color: #e5c07b; border: 1px solid #4a4a20; }
 
-#docs-overlay .modal-box { width: 720px; }
-#docs-layout { display: flex; flex: 1; min-height: 0; }
-#docs-sidebar {
-  width: 160px; flex-shrink: 0; overflow-y: auto;
-  border-right: 1px solid #2a2a2a; padding: 8px 0;
+/* Command reference (external page, embedded) */
+#docs-overlay .modal-box { width: 880px; height: 80vh; }
+#docs-frame { flex: 1; min-height: 0; width: 100%; border: none; background: #1a1a1a; border-radius: 0 0 6px 6px; }
+#docs-fallback {
+  display: none; padding: 20px 18px; color: #888; font-size: 12px; line-height: 1.7;
 }
-.docs-cmd-btn {
-  display: block; width: 100%; text-align: left;
-  background: none; border: none; color: #777;
-  font-family: Consolas, monospace; font-size: 12px;
-  padding: 5px 14px; cursor: pointer;
-}
-.docs-cmd-btn:hover { background: #252525; color: #abb2bf; }
-.docs-cmd-btn.active { background: #2a3a4a; color: #61afef; }
-#docs-content { flex: 1; overflow-y: auto; padding: 16px 18px; min-width: 0; }
-.docs-cmd-name { color: #61afef; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-.docs-cmd-doc  { color: #888; font-size: 12px; margin-bottom: 16px; line-height: 1.6; }
-.docs-section-title { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
-.docs-params-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-.docs-params-table th { color: #555; font-weight: normal; text-align: left; padding: 3px 8px 5px 0; border-bottom: 1px solid #2a2a2a; }
-.docs-params-table td { padding: 5px 8px 5px 0; color: #abb2bf; vertical-align: top; border-bottom: 1px solid #1e1e1e; }
-.docs-params-table td:first-child { color: #c678dd; width: 100px; }
-.docs-params-table td:nth-child(2) { color: #e5c07b; width: 80px; }
-.docs-param-enum { color: #666; font-size: 11px; margin-top: 2px; line-height: 1.5; }
-.docs-subtype-block { margin-bottom: 14px; border-left: 2px solid #2a3a4a; padding-left: 12px; }
-.docs-subtype-name { color: #98c379; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.docs-subtype-doc { color: #777; font-size: 11px; margin-bottom: 8px; }
-.docs-example {
-  background: #161616; border: 1px solid #2a2a2a; border-radius: 4px;
-  padding: 8px 12px; font-size: 12px; color: #abb2bf;
-  margin-bottom: 20px; white-space: pre;
-}
-.docs-no-params { color: #444; font-size: 12px; margin-bottom: 16px; font-style: italic; }
+#docs-fallback code { color: #61afef; }
 </style>
 </head>
 <body>
@@ -373,11 +352,13 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
   <div class="modal-box">
     <div class="modal-header">
       <span class="modal-title">Command Reference</span>
+      <a class="modal-link" id="docs-popout" href="commands.html" target="_blank" rel="noopener">Open in new tab</a>
       <button class="modal-close" id="docs-close" title="Close">&#x2715;</button>
     </div>
-    <div id="docs-layout">
-      <div id="docs-sidebar"></div>
-      <div id="docs-content"><span style="color:#444;font-size:12px;">Select a command.</span></div>
+    <iframe id="docs-frame" title="Command reference"></iframe>
+    <div id="docs-fallback">
+      The reference page didn't load. Make sure <code>commands.html</code> sits in the same
+      folder as this file, or open it in a new tab with the link above.
     </div>
   </div>
 </div>
@@ -414,6 +395,30 @@ html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
     document.getElementById('close-warn-overlay').classList.remove('open');
     document.getElementById('multiexport-overlay').classList.remove('open');
   }});
+})();
+</script>
+<script>
+// ── Command reference: loads commands.html on first open ──
+(function initDocs() {
+  const DOCS_URL = 'commands.html';
+  const overlay  = document.getElementById('docs-overlay');
+  const frame    = document.getElementById('docs-frame');
+  const fallback = document.getElementById('docs-fallback');
+  const popout   = document.getElementById('docs-popout');
+
+  popout.href = DOCS_URL;
+
+  frame.addEventListener('error', () => {
+    frame.style.display = 'none';
+    fallback.style.display = 'block';
+  });
+
+  document.getElementById('btn-docs').addEventListener('click', () => {
+    if (!frame.getAttribute('src')) frame.setAttribute('src', DOCS_URL);
+    overlay.classList.add('open');
+  });
+  document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
 })();
 </script>
 <script>
@@ -543,6 +548,7 @@ require(['vs/editor/editor.main'], function () {
       doc: 'Save, load, and manage map and model files.',
       example: 'file save myMap\nfile list\nfile insertmodel 1 myModel 0 0 0 0',
     },
+
     squadspawn: {
       params: [
         {name: 'pX', type: 'number'},
@@ -1339,75 +1345,6 @@ require(['vs/editor/editor.main'], function () {
       document.getElementById('import-overlay').classList.remove('open');
     }
   });
-
-  // ── Docs modal ──
-  (function initDocs() {
-    const overlay  = document.getElementById('docs-overlay');
-    const sidebar  = document.getElementById('docs-sidebar');
-    const content  = document.getElementById('docs-content');
-    let activeBtn  = null;
-
-    function typeColor(type) {
-      if (type === 'number')  return '#61afef';
-      if (type === 'uid')     return '#c678dd';
-      if (type === 'enum')    return '#e5c07b';
-      if (type === 'string')  return '#98c379';
-      if (type === 'command') return '#e06c75';
-      return '#abb2bf';
-    }
-
-    function renderParamsTable(params) {
-      if (!params.length) return '<p class="docs-no-params">No parameters.</p>';
-      let rows = params.map(p => {
-        let extra = '';
-        if (p.type === 'enum') {
-          const preview = p.values.length > 12
-            ? p.values.slice(0, 12).join(', ') + ` … (+${p.values.length - 12} more)`
-            : p.values.join(', ');
-          extra = `<div class="docs-param-enum">${preview}</div>`;
-        }
-        if (p.type === 'uid') extra = `<div class="docs-param-enum">UUID or %variable</div>`;
-        const defStr = p.default !== undefined ? ` <span style="color:#4a4a4a">(default: ${p.default})</span>` : '';
-        return `<tr><td>${p.name}${defStr}</td><td style="color:${typeColor(p.type)}">${p.type}</td><td>${extra}</td></tr>`;
-      }).join('');
-      return `<table class="docs-params-table"><thead><tr><th>parameter</th><th>type</th><th>values</th></tr></thead><tbody>${rows}</tbody></table>`;
-    }
-
-    function renderCmd(name, spec) {
-      let html = `<div class="docs-cmd-name">${name}</div><div class="docs-cmd-doc">${spec.doc}</div>`;
-      if (spec.subtypes) {
-        html += `<div class="docs-section-title">subtypes</div><div>`;
-        for (const [subName, sub] of Object.entries(spec.subtypes)) {
-          const allParams = [...spec.params, ...(sub.params || [])];
-          html += `<div class="docs-subtype-block"><div class="docs-subtype-name">${name} ${subName}</div><div class="docs-subtype-doc">${sub.doc}</div>${renderParamsTable(allParams)}</div>`;
-        }
-        html += `</div>`;
-      } else {
-        html += `<div class="docs-section-title">parameters</div>${renderParamsTable(spec.params)}`;
-      }
-      if (spec.example) html += `<div class="docs-section-title">example</div><div class="docs-example">${spec.example}</div>`;
-      content.innerHTML = html;
-    }
-
-    Object.keys(CMDS).forEach(name => {
-      const btn = document.createElement('button');
-      btn.className = 'docs-cmd-btn';
-      btn.textContent = name;
-      btn.addEventListener('click', () => {
-        if (activeBtn) activeBtn.classList.remove('active');
-        activeBtn = btn; btn.classList.add('active');
-        renderCmd(name, CMDS[name]);
-      });
-      sidebar.appendChild(btn);
-    });
-
-    document.getElementById('btn-docs').addEventListener('click', () => {
-      overlay.classList.add('open');
-      if (!activeBtn) { const first = sidebar.querySelector('.docs-cmd-btn'); if (first) first.click(); }
-    });
-    document.getElementById('docs-close').addEventListener('click', () => overlay.classList.remove('open'));
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-  })();
 
   // ── Session persistence via localStorage ──
   const STORAGE_KEY = 'cmdEditor_session';
